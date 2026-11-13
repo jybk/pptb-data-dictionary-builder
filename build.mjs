@@ -9,10 +9,10 @@ import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } f
 const args = new Set(process.argv.slice(2));
 
 function copyStatic(out) {
-    mkdirSync(`${out}/icon`, { recursive: true });
+    mkdirSync(`${out}/icons`, { recursive: true });
     cpSync("src/index.html", `${out}/index.html`);
     cpSync("src/styles.css", `${out}/styles.css`);
-    cpSync("icon", `${out}/icon`, { recursive: true });
+    cpSync("icons", `${out}/icons`, { recursive: true });
 }
 
 const appOptions = (out) => ({

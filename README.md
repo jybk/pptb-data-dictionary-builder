@@ -53,7 +53,7 @@ Load into ToolBox: Settings → Show Debug Menu, then Debug → Load Local Tool 
 ## Publish
 
 1. Fill in the owner details (GitHub user or organisation, author name, optional npm scope):
-   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]`
+   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]` (already set to `jybk` / `@jybk`)
 2. Create the public GitHub repository `pptb-data-dictionary-builder` and push `main`. The ToolBox validator checks that the repository and README URLs resolve, so push before validating.
 3. `npm install && npm run build && npm test && npm run validate`
 4. `npm run finalize-package` then `npm publish --access public`

@@ -1,17 +1,14 @@
 {
-    "name": "pptb-data-dictionary-builder",
+    "name": "@jybk/pptb-data-dictionary-builder",
     "version": "1.0.0",
     "displayName": "Data Dictionary Builder",
     "description": "Paste a model-driven app form or view URL and get a data dictionary of the fields on it, in order of appearance, grouped by tab and section.",
     "main": "index.html",
-    "icon": "icon/data-dictionary.svg",
+    "icon": "icons/data-dictionary-builder.svg",
     "license": "MIT",
-    "author": "jybk",
+    "author": "Jay",
     "contributors": [
-        {
-            "name": "jybk",
-            "url": "https://github.com/jybk"
-        }
+        "Jay"
     ],
     "keywords": [
         "powerplatform",
@@ -26,7 +23,7 @@
     "configurations": {
         "repository": "https://github.com/jybk/pptb-data-dictionary-builder",
         "website": "https://github.com/jybk/pptb-data-dictionary-builder#readme",
-        "readmeUrl": "https://raw.githubusercontent.com/jybk/pptb-data-dictionary-builder/refs/heads/main/README.md"
+        "readmeUrl": "https://raw.githubusercontent.com/jybk/pptb-data-dictionary-builder/main/README.md"
     },
     "features": {
         "minAPI": "1.2.0",
@@ -57,5 +54,9 @@
     "files": [
         "dist",
         "npm-shrinkwrap.json"
-    ]
+    ],
+    "homepage": "https://github.com/jybk/pptb-data-dictionary-builder#readme",
+    "bugs": {
+        "url": "https://github.com/jybk/pptb-data-dictionary-builder/issues"
+    }
 }

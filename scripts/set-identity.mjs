@@ -12,13 +12,15 @@ const repo = "pptb-data-dictionary-builder";
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 pkg.name = scope ? `@${scope.replace(/^@/, "")}/${repo}` : repo;
 pkg.author = author;
-pkg.contributors = [{ name: author, url: `https://github.com/${githubUser}` }];
+pkg.contributors = [author];
 pkg.configurations = {
     repository: `https://github.com/${githubUser}/${repo}`,
     website: `https://github.com/${githubUser}/${repo}#readme`,
-    readmeUrl: `https://raw.githubusercontent.com/${githubUser}/${repo}/refs/heads/main/README.md`,
+    readmeUrl: `https://raw.githubusercontent.com/${githubUser}/${repo}/main/README.md`,
 };
 pkg.repository = { type: "git", url: `git+https://github.com/${githubUser}/${repo}.git` };
+pkg.homepage = `https://github.com/${githubUser}/${repo}#readme`;
+pkg.bugs = { url: `https://github.com/${githubUser}/${repo}/issues` };
 writeFileSync("package.json", JSON.stringify(pkg, null, 4) + "\n");
 writeFileSync("LICENSE", readFileSync("LICENSE", "utf8").replace(/Copyright \(c\) (\d{4}) .*/, `Copyright (c) $1 ${author}`));
 console.log(`Set package name to ${pkg.name}, author to ${author}, repository to github.com/${githubUser}/${repo}.`);
