@@ -1,12 +1,12 @@
 {
     "name": "@jybk/pptb-data-dictionary-builder",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "lockfileVersion": 3,
     "requires": true,
     "packages": {
         "": {
             "name": "@jybk/pptb-data-dictionary-builder",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "license": "MIT",
             "devDependencies": {
                 "@pptb/types": "^1.2.8",
