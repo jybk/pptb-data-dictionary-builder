@@ -1,0 +1,64 @@
+# Data Dictionary Builder
+
+A tool for [Power Platform ToolBox](https://www.powerplatformtoolbox.com). Paste the address of a model-driven app form or view and get a data dictionary of the fields on it: in the order they appear on screen, grouped by tab and section, with the usual data dictionary columns.
+
+Other metadata exporters list every column of a table. This one lists what a user actually sees on one screen, which is what you need for training material, UAT scripts, migration mapping workshops and functional design documents.
+
+## Use
+
+1. Open the tool in ToolBox and select a connection.
+2. Paste an address and press **Build dictionary**. Accepted:
+   - a record address from a model-driven app (`…/main.aspx?appid=…&pagetype=entityrecord&etn=account&id=…&formid=…`)
+   - a view address (`…&pagetype=entitylist&etn=account&viewid=…`)
+   - a form or view designer address from make.powerapps.com
+   - a table logical name (`account`) or a form/view id
+3. If the address does not say which form (record addresses often leave `formid` out), pick one from the list. Forms that belong to the app in the address are marked.
+4. Filter by tab, choose columns, then export to Excel, CSV, Markdown or JSON, or copy the table.
+
+## Output
+
+Rows follow the order of appearance: header, each tab left to right (sections and fields top to bottom), footer. For views, columns left to right.
+
+| Column | Default | Notes |
+| --- | --- | --- |
+| #, Tab, Section, Label | on | Label is the label on the form; falls back to the column display name |
+| Logical Name, Data Type, Format, Length / Range | on | |
+| Required, Read-only | on | Read-only = locked on the form, or the column can never be edited |
+| Allowed Values, Default, Lookup Targets | on | Choice values as `value = label` |
+| Description, Custom | on | |
+| Display Name, Schema Name, Table, Visible, Source, Searchable, Audited, Column Security, Control, Notes | off | Turn on under **Columns** |
+
+Options: include hidden tabs/sections/fields, include subgrids/quick views/web resources, list each field once, one Excel worksheet per tab, label language (when the form has labels in more than one language).
+
+The Excel workbook also has an **Allowed Values** sheet (one row per choice) and an **About** sheet (source address, environment, date, scope).
+
+## Limits
+
+- Reflects the saved form or view design. Business rules, scripts and security roles can show, hide or lock fields at runtime, and the tool cannot see that.
+- Model-driven forms and views only. Canvas apps, custom pages, Power Pages and dashboards are not supported.
+- Business process flow stages and fields inside quick view forms are not expanded (a quick view appears as one control when "include subgrids…" is on).
+- Read-only: it reads form, view and column definitions, never records, and writes nothing to Dataverse.
+
+## Develop
+
+```bash
+npm install
+npm run build      # type-check and bundle into dist/
+npm test           # unit tests for URL parsing, form/view parsing, dictionary rows and exports
+npm run preview    # builds preview/ with mock data; open preview/index.html?demo=form in a browser
+```
+
+Load into ToolBox: Settings → Show Debug Menu, then Debug → Load Local Tool → select this folder.
+
+## Publish
+
+1. Fill in the owner details (GitHub user or organisation, author name, optional npm scope):
+   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]`
+2. Create the public GitHub repository `pptb-data-dictionary-builder` and push `main`. The ToolBox validator checks that the repository and README URLs resolve, so push before validating.
+3. `npm install && npm run build && npm test && npm run validate`
+4. `npm run finalize-package` then `npm publish --access public`
+5. Submit the npm package name at https://www.powerplatformtoolbox.com/submit-tool
+
+## License
+
+MIT

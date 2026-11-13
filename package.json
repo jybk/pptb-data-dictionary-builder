@@ -1,0 +1,59 @@
+{
+    "name": "pptb-data-dictionary-builder",
+    "version": "1.0.0",
+    "displayName": "Data Dictionary Builder",
+    "description": "Paste a model-driven app form or view URL and get a data dictionary of the fields on it, in order of appearance, grouped by tab and section.",
+    "main": "index.html",
+    "icon": "icon/data-dictionary.svg",
+    "license": "MIT",
+    "author": "Your Name",
+    "contributors": [
+        {
+            "name": "Your Name"
+        }
+    ],
+    "keywords": [
+        "powerplatform",
+        "dataverse",
+        "toolbox",
+        "pptb",
+        "data-dictionary",
+        "documentation",
+        "forms",
+        "metadata"
+    ],
+    "configurations": {
+        "repository": "https://github.com/your-github-user/pptb-data-dictionary-builder",
+        "readmeUrl": "https://raw.githubusercontent.com/your-github-user/pptb-data-dictionary-builder/refs/heads/main/README.md"
+    },
+    "features": {
+        "minAPI": "1.2.0",
+        "connections": 1
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/your-github-user/pptb-data-dictionary-builder.git"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "scripts": {
+        "build": "tsc --noEmit && node build.mjs",
+        "watch": "node build.mjs --watch",
+        "preview": "node build.mjs --preview",
+        "test": "node build.mjs --tests && node --test .tmp/tests/core.test.mjs",
+        "validate": "pptb-validate",
+        "finalize-package": "npm shrinkwrap"
+    },
+    "devDependencies": {
+        "@pptb/types": "^1.2.8",
+        "@xmldom/xmldom": "^0.9.8",
+        "esbuild": "^0.25.12",
+        "fflate": "^0.8.2",
+        "typescript": "^5.6.0"
+    },
+    "files": [
+        "dist",
+        "npm-shrinkwrap.json"
+    ]
+}

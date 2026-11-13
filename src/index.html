@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Data Dictionary Builder</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <div class="app">
+            <header class="top">
+                <h1>Data Dictionary Builder</h1>
+                <div id="conn" class="conn" title="Active connection"></div>
+            </header>
+
+            <section class="source">
+                <label for="url">Form or view address</label>
+                <div class="source-row">
+                    <input id="url" type="text" spellcheck="false" autocomplete="off" placeholder="https://yourorg.crm.dynamics.com/main.aspx?appid=…&pagetype=entityrecord&etn=account&id=…" />
+                    <button id="build" class="btn primary" type="button">Build dictionary</button>
+                </div>
+                <p class="hint">
+                    Paste the address of an open record or view from a model-driven app, or of a form in the make.powerapps.com designer. A table name such as <code>account</code> works too.
+                </p>
+            </section>
+
+            <div id="notices"></div>
+
+            <section id="picker" class="picker" hidden>
+                <h2 id="picker-title"></h2>
+                <p id="picker-hint" class="hint"></p>
+                <div id="picker-list"></div>
+            </section>
+
+            <section id="result" hidden>
+                <div id="summary" class="summary"></div>
+                <div class="toolbar">
+                    <div id="tabs" class="chips" role="group" aria-label="Filter by tab"></div>
+                    <div class="tools">
+                        <input id="search" type="search" placeholder="Filter fields" aria-label="Filter fields" />
+                        <details class="menu" id="options-menu">
+                            <summary class="btn">Options</summary>
+                            <div class="menu-panel" id="options-panel"></div>
+                        </details>
+                        <details class="menu" id="columns-menu">
+                            <summary class="btn">Columns</summary>
+                            <div class="menu-panel menu-columns" id="columns-panel"></div>
+                        </details>
+                        <details class="menu" id="export-menu">
+                            <summary class="btn primary">Export</summary>
+                            <div class="menu-panel menu-actions">
+                                <button type="button" data-export="xlsx">Excel workbook (.xlsx)</button>
+                                <button type="button" data-export="csv">CSV</button>
+                                <button type="button" data-export="md">Markdown</button>
+                                <button type="button" data-export="json">JSON</button>
+                                <hr />
+                                <button type="button" data-export="copy">Copy table to clipboard</button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table id="grid"></table>
+                </div>
+                <p id="footnote" class="footnote"></p>
+            </section>
+
+            <section id="empty" class="empty">
+                <h2>What you get</h2>
+                <ul>
+                    <li>Every field on the form or view, in the order it appears on screen: header, then each tab and section, then footer.</li>
+                    <li>Data dictionary columns for each field: label, logical name, data type, format, length or range, required level, allowed values, lookup targets and description.</li>
+                    <li>Export to Excel, CSV, Markdown or JSON, or copy the table straight into a document.</li>
+                </ul>
+                <p class="hint">The tool only reads form, view and column definitions. It does not read or change any records.</p>
+            </section>
+        </div>
+        <script src="app.js"></script>
+    </body>
+</html>
