@@ -62,12 +62,11 @@ Load into ToolBox: Settings → Show Debug Menu, then Debug → Load Local Tool 
 
 ## Publish
 
-1. Fill in the owner details (GitHub user or organisation, author name, optional npm scope):
-   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]`
-2. Create the public GitHub repository `pptb-data-dictionary-builder` and push `main`. The ToolBox validator checks that the repository and README URLs resolve, so push before validating.
-3. `npm install && npm run build && npm test && npm run validate`
-4. `npm run finalize-package` then `npm publish --access public`
-5. Submit the npm package name at https://www.powerplatformtoolbox.com/submit-tool
+Releases are published by GitHub Actions through npm trusted publishing; no npm token is stored.
+
+1. Set the new version in `package.json` (`npm version <x.y.z> --no-git-tag-version`), update `CHANGELOG.md`, commit and push.
+2. Tag and push the tag: `git tag v<x.y.z> && git push origin v<x.y.z>`. The `publish.yml` workflow builds, tests, validates and publishes.
+3. For a first submission or after a change request, submit the package name at https://www.powerplatformtoolbox.com/submit-tool
 
 ## License
 

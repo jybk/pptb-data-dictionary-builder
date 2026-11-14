@@ -1,0 +1,32 @@
+# Publishes to npm when a version tag (v1.2.3) is pushed.
+# Authenticates with npm trusted publishing (OIDC): no npm token is stored anywhere.
+# One-time setup on npmjs.com: package Settings -> Trusted Publisher -> GitHub Actions,
+# with user "jybk", repository "pptb-data-dictionary-builder", workflow filename "publish.yml".
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # lets npm verify that this workflow is the publisher
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Check that the tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run validate
+      - run: npm publish --access public
