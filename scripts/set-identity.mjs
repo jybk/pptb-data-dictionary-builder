@@ -12,7 +12,7 @@ const repo = "pptb-data-dictionary-builder";
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 pkg.name = scope ? `@${scope.replace(/^@/, "")}/${repo}` : repo;
 pkg.author = author;
-pkg.contributors = [author];
+pkg.contributors = [{ name: author }];
 pkg.configurations = {
     repository: `https://github.com/${githubUser}/${repo}`,
     website: `https://github.com/${githubUser}/${repo}#readme`,

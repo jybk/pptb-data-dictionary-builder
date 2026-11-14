@@ -117,6 +117,8 @@ export function hostMismatch(target: ParsedTarget, connectionUrl: string | undef
     } catch {
         return null;
     }
-    if (connHost === target.host) return null;
+    // Connections are often stored with the Web API host (org.api.crm4.dynamics.com); that is the same environment
+    const same = (host: string) => host.replace(".api.", ".");
+    if (same(connHost) === same(target.host)) return null;
     return `The URL points to ${target.host}, but the active connection is ${connHost}. The dictionary is built from the active connection.`;
 }

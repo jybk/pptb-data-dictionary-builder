@@ -1,6 +1,6 @@
 {
     "name": "@jybk/pptb-data-dictionary-builder",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "displayName": "Data Dictionary Builder",
     "description": "Paste a model-driven app form or view URL and get a data dictionary of the fields on it, in order of appearance, grouped by tab and section.",
     "main": "index.html",
@@ -8,7 +8,9 @@
     "license": "MIT",
     "author": "Jay",
     "contributors": [
-        "Jay"
+        {
+            "name": "Jay"
+        }
     ],
     "keywords": [
         "powerplatform",
@@ -26,7 +28,7 @@
         "readmeUrl": "https://raw.githubusercontent.com/jybk/pptb-data-dictionary-builder/main/README.md"
     },
     "features": {
-        "minAPI": "1.2.0",
+        "minAPI": "1.2.7",
         "connections": 1
     },
     "repository": {

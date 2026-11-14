@@ -2,6 +2,8 @@
 
 A tool for [Power Platform ToolBox](https://www.powerplatformtoolbox.com). Paste the address of a model-driven app form or view and get a data dictionary of the fields on it: in the order they appear on screen, grouped by tab and section, with the usual data dictionary columns.
 
+![Data Dictionary Builder running in Power Platform ToolBox](https://raw.githubusercontent.com/jybk/pptb-data-dictionary-builder/main/docs/screenshot.png)
+
 Other metadata exporters list every column of a table. This one lists what a user actually sees on one screen, which is what you need for training material, UAT scripts, migration mapping workshops and functional design documents.
 
 ## Use
@@ -13,7 +15,7 @@ Other metadata exporters list every column of a table. This one lists what a use
    - a form or view designer address from make.powerapps.com
    - a table logical name (`account`) or a form/view id
 3. If the address does not say which form (record addresses often leave `formid` out), pick one from the list. Forms that belong to the app in the address are marked.
-4. Filter by tab, choose columns, then export to Excel, CSV, Markdown or JSON, or copy the table.
+4. Narrow the list with the tab buttons (select one or several; **All** clears the selection) and the filter box, choose columns, then export to Excel, CSV, Markdown or JSON, or copy the table. Exports contain the rows shown.
 
 ## Output
 
@@ -39,6 +41,14 @@ The Excel workbook also has an **Allowed Values** sheet (one row per choice) and
 - Business process flow stages and fields inside quick view forms are not expanded (a quick view appears as one control when "include subgrids…" is on).
 - Read-only: it reads form, view and column definitions, never records, and writes nothing to Dataverse.
 
+## Requirements
+
+Power Platform ToolBox 1.2.7 or later, with one Dataverse connection.
+
+## AI assistance
+
+Most of this tool's code, tests and documentation were generated with Claude (Anthropic), working from the maintainer's requirements and feedback. The maintainer directs the design, runs the tool in Power Platform ToolBox against a live Dataverse environment before each release, and is responsible for what is published. Issues and corrections are welcome.
+
 ## Develop
 
 ```bash
@@ -53,7 +63,7 @@ Load into ToolBox: Settings → Show Debug Menu, then Debug → Load Local Tool 
 ## Publish
 
 1. Fill in the owner details (GitHub user or organisation, author name, optional npm scope):
-   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]` (already set to `jybk` / `@jybk`)
+   `node scripts/set-identity.mjs <github-user> "<Author Name>" [npm-scope]`
 2. Create the public GitHub repository `pptb-data-dictionary-builder` and push `main`. The ToolBox validator checks that the repository and README URLs resolve, so push before validating.
 3. `npm install && npm run build && npm test && npm run validate`
 4. `npm run finalize-package` then `npm publish --access public`

@@ -62,6 +62,7 @@ test("accepts bare table names and ids, rejects junk", () => {
 test("warns when URL host differs from the connection, not for the maker portal", () => {
     assert.match(hostMismatch(parseTarget("https://prod.crm.dynamics.com/main.aspx?etn=account"), "https://dev.crm.dynamics.com/") ?? "", /prod\.crm/);
     assert.equal(hostMismatch(parseTarget("https://dev.crm.dynamics.com/main.aspx?etn=account"), "https://dev.crm.dynamics.com"), null);
+    assert.equal(hostMismatch(parseTarget("https://dev.crm4.dynamics.com/main.aspx?etn=account"), "https://dev.api.crm4.dynamics.com/"), null);
     assert.equal(hostMismatch(parseTarget(`https://make.powerapps.com/e/x/entity/account/form/edit/${FORM}`), "https://dev.crm.dynamics.com"), null);
 });
 

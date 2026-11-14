@@ -48,7 +48,7 @@ const state = {
     options: { includeHidden: false, includeControls: false, uniqueOnly: false, splitByTab: false } as Options,
     lcid: 1033,
     columns: new Set(COLUMNS.filter((c) => c.on).map((c) => c.key)),
-    tabFilter: null as string | null,
+    tabFilter: new Set<string>(),
     search: "",
     busy: false,
     runId: 0,
@@ -127,7 +127,7 @@ function resetResult(): void {
     state.surface = null;
     state.layout = null;
     state.dict = null;
-    state.tabFilter = null;
+    state.tabFilter = new Set();
     state.search = "";
     $<HTMLInputElement>("search").value = "";
 }
@@ -235,7 +235,7 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
     state.layout = layout;
     state.tables = tables;
     state.lcid = lcid;
-    state.tabFilter = null;
+    state.tabFilter = new Set();
     rebuild();
     if (state.dict?.multipleTables) state.columns.add("table");
 }
@@ -243,7 +243,8 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
 function rebuild(): void {
     if (!state.surface || !state.layout) return;
     state.dict = buildDictionary(state.layout.items, state.surface.etn, state.tables, { ...state.options, lcid: state.lcid });
-    if (state.tabFilter && !state.dict.tabs.some((t) => t.key === state.tabFilter)) state.tabFilter = null;
+    const keys = new Set(state.dict.tabs.map((t) => t.key));
+    for (const key of [...state.tabFilter]) if (!keys.has(key)) state.tabFilter.delete(key);
 }
 
 /* ---------- derived views ---------- */
@@ -257,7 +258,7 @@ function shownRows(): DictionaryRow[] {
     const needle = state.search.trim().toLowerCase();
     const columns = activeColumns();
     return state.dict.rows.filter((r) => {
-        if (state.tabFilter && r.groupKey !== state.tabFilter) return false;
+        if (state.tabFilter.size && !state.tabFilter.has(r.groupKey)) return false;
         if (!needle) return true;
         return columns.some((c) => String(r.values[c.key] ?? "").toLowerCase().includes(needle)) || String(r.values.logicalName).toLowerCase().includes(needle);
     });
@@ -279,7 +280,7 @@ function exportContext(): ExportContext {
         state.options.includeHidden ? "hidden items included" : "hidden items left out",
         state.options.includeControls ? "subgrids and other controls included" : "fields only",
         state.options.uniqueOnly ? "first occurrence of each field only" : "",
-        state.tabFilter ? "one tab only" : "",
+        state.tabFilter.size ? `only ${dict.tabs.filter((t) => state.tabFilter.has(t.key)).map((t) => t.label).join(", ")}` : "",
         state.search.trim() ? `filtered by "${state.search.trim()}"` : "",
     ].filter(Boolean);
     return {
@@ -402,7 +403,7 @@ function renderTabs(): void {
         return;
     }
     const chip = (key: string | null, label: string, count: number) =>
-        `<button type="button" class="chip" data-tab="${esc(key ?? "")}" aria-pressed="${state.tabFilter === key}">${esc(label)}<span class="n">${count}</span></button>`;
+        `<button type="button" class="chip" data-tab="${esc(key ?? "")}" aria-pressed="${key ? state.tabFilter.has(key) : state.tabFilter.size === 0}" title="${key ? "Show or hide this tab. Several can be selected." : "Show all tabs"}">${esc(label)}<span class="n">${count}</span></button>`;
     $("tabs").innerHTML = chip(null, "All", dict.rows.length) + dict.tabs.map((t) => chip(t.key, t.label, t.count)).join("");
 }
 
@@ -431,7 +432,7 @@ function cellHtml(column: ColumnDef, value: string | number): string {
     const text = String(value ?? "");
     if (column.key === "choices") {
         const lines = text.split("\n");
-        if (lines.length > 6) return `<span title="${esc(text)}">${esc(lines.slice(0, 5).join("\n"))}\n<span class="more">+ ${lines.length - 5} more (all are exported)</span></span>`;
+        if (lines.length > 6) return `<span title="${esc(text)}">${esc(lines.slice(0, 5).join("\n"))}\n<span class="more">+ ${lines.length - 5} more</span></span>`;
     }
     return esc(text);
 }
@@ -520,7 +521,12 @@ function wire(): void {
         }
         const chip = el.closest<HTMLElement>("[data-tab]");
         if (chip) {
-            state.tabFilter = chip.dataset.tab || null;
+            const key = chip.dataset.tab;
+            if (!key) state.tabFilter.clear();
+            else if (state.tabFilter.has(key)) state.tabFilter.delete(key);
+            else state.tabFilter.add(key);
+            // Every tab selected is the same as no filter
+            if (state.dict && state.tabFilter.size === state.dict.tabs.length) state.tabFilter.clear();
             renderTabs();
             return renderGrid();
         }
