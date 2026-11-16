@@ -18,6 +18,7 @@
                 <div class="source-row">
                     <input id="url" type="text" spellcheck="false" autocomplete="off" placeholder="https://yourorg.crm.dynamics.com/main.aspx?appid=…&pagetype=entityrecord&etn=account&id=…" />
                     <button id="build" class="btn primary" type="button">Build dictionary</button>
+                    <button id="add" class="btn" type="button" title="Keep the forms already built and add this one. Each form becomes its own worksheet in the Excel export.">Add form</button>
                 </div>
                 <p class="hint">
                     Paste the address of an open record or view from a model-driven app, or of a form in the make.powerapps.com designer. A table name such as <code>account</code> works too.
@@ -33,7 +34,14 @@
             </section>
 
             <section id="result" hidden>
-                <div id="summary" class="summary"></div>
+                <div id="forms" class="forms" role="group" aria-label="Forms in this dictionary" hidden></div>
+                <div class="summary-row">
+                    <label class="name-field" title="Shown on the form strip and used as the worksheet name in Excel (31 characters at most)">
+                        <span>Form / Excel tab name</span>
+                        <input id="form-name" type="text" maxlength="31" spellcheck="false" autocomplete="off" />
+                    </label>
+                    <div id="summary" class="summary"></div>
+                </div>
                 <div class="toolbar">
                     <div id="tabs" class="chips" role="group" aria-label="Filter by tab"></div>
                     <div class="tools">
@@ -71,6 +79,7 @@
                     <li>Every field on the form or view, in the order it appears on screen: header, then each tab and section, then footer.</li>
                     <li>Data dictionary columns for each field: label, logical name, data type, format, length or range, required level, allowed values, lookup targets and description.</li>
                     <li>Export to Excel, CSV, Markdown or JSON, or copy the table straight into a document.</li>
+                    <li>Document several forms in one go: use <strong>Add form</strong> for each, name them, and get one Excel worksheet per form.</li>
                 </ul>
                 <p class="hint">The tool only reads form, view and column definitions. It does not read or change any records.</p>
             </section>

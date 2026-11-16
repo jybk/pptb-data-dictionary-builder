@@ -17,6 +17,12 @@ Other metadata exporters list every column of a table. This one lists what a use
 3. If the address does not say which form (record addresses often leave `formid` out), pick one from the list. Forms that belong to the app in the address are marked.
 4. Narrow the list with the tab buttons (select one or several; **All** clears the selection) and the filter box, choose columns, then export to Excel, CSV, Markdown or JSON, or copy the table. Exports contain the rows shown.
 
+### Several forms in one dictionary
+
+After the first form is built, paste another address and press **Add form** instead of **Build dictionary**. Each form or view appears on a strip above the table; click one to show it, or × to remove it. Give each a name in the **Form / Excel tab name** box (31 characters at most, the Excel limit).
+
+Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. **Build dictionary** replaces the form on screen and leaves the others alone.
+
 ## Output
 
 Rows follow the order of appearance: header, each tab left to right (sections and fields top to bottom), footer. For views, columns left to right.
@@ -32,7 +38,7 @@ Rows follow the order of appearance: header, each tab left to right (sections an
 
 Options: include hidden tabs/sections/fields, include subgrids/quick views/web resources, list each field once, one Excel worksheet per tab, label language (when the form has labels in more than one language).
 
-The Excel workbook also has an **Allowed Values** sheet (one row per choice) and an **About** sheet (source address, environment, date, scope).
+The worksheet is named after the form (the name box). The Excel workbook also has an **Allowed Values** sheet (one row per choice) and an **About** sheet (source address, environment, date, scope).
 
 ## Limits
 

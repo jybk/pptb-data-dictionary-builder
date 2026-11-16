@@ -4,7 +4,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { unzipSync, strFromU8 } from "fflate";
 import "../dev/fixtures.js";
 import { buildDictionary, COLUMNS, type TableMeta } from "../src/dictionary";
-import { toCsv, toMarkdown, toXlsx, type ExportContext } from "../src/exporters";
+import { toCsv, toJson, toMarkdown, toXlsx, type ExportContext } from "../src/exporters";
 import { parseFormXml, parseViewLayout } from "../src/layoutParser";
 import { hostMismatch, parseTarget } from "../src/urlParser";
 import { safeSheetNames } from "../src/xlsx";
@@ -123,16 +123,36 @@ test("view columns resolve linked tables through FetchXML aliases", () => {
 
 test("exports: CSV quoting, Markdown per tab, valid xlsx package", () => {
     const d = buildDictionary(parseFormXml(F.formXml, parse).items, "account", tables, defaults);
-    const ctx: ExportContext = { title: "T", meta: [["Table", "account"]], columns: COLUMNS.filter((c) => c.on), rows: d.rows, tabs: d.tabs, choices: d.choices, splitByTab: true };
-    const csv = toCsv(ctx);
+    const ctx: ExportContext = { name: "Account main", title: "T", meta: [["Table", "account"]], columns: COLUMNS.filter((c) => c.on), rows: d.rows, tabs: d.tabs, choices: d.choices, splitByTab: true };
+    const csv = toCsv([ctx]);
     assert.ok(csv.startsWith("﻿#,Tab,Section,Label"));
     assert.ok(csv.includes('"1 = Do Not Allow\n0 = Allow"'));
     assert.equal(csv.split("\r\n").length, 16);
-    const md = toMarkdown(ctx);
+    const md = toMarkdown([ctx]);
     assert.ok(md.includes("## Summary") && md.includes("## Details") && md.includes("1 = Do Not Allow<br>0 = Allow"));
-    const zip = unzipSync(toXlsx(ctx));
+    const zip = unzipSync(toXlsx([ctx]));
     const workbook = strFromU8(zip["xl/workbook.xml"]);
     assert.deepEqual([...workbook.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]), ["Header", "Summary", "Details", "Allowed Values", "About"]);
     assert.ok(strFromU8(zip["xl/worksheets/sheet2.xml"]).includes("Account Name"));
     assert.deepEqual(safeSheetNames(["A/B:C", "a b c", "", "x".repeat(40)]), ["A B C", "a b c (2)", "Sheet3", "x".repeat(31)]);
+});
+
+test("several forms: one worksheet per form under its given name, Form column elsewhere", () => {
+    const form = buildDictionary(parseFormXml(F.formXml, parse).items, "account", tables, defaults);
+    const view = buildDictionary(parseViewLayout(F.layoutXml, F.fetchXml, parse).items, "account", tables, defaults);
+    const base = { title: "T", meta: [["Table", "account"]] as [string, string][], columns: COLUMNS.filter((c) => c.on), splitByTab: true };
+    const a: ExportContext = { ...base, name: "Sales: main/form", rows: form.rows, tabs: form.tabs, choices: form.choices };
+    const b: ExportContext = { ...base, name: "Active accounts", rows: view.rows, tabs: view.tabs, choices: view.choices };
+    const zip = unzipSync(toXlsx([a, b]));
+    const names = [...strFromU8(zip["xl/workbook.xml"]).matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(names, ["Sales  main form", "Active accounts", "Allowed Values", "About"]);
+    assert.ok(strFromU8(zip["xl/worksheets/sheet3.xml"]).includes("Sales: main/form"));
+    const single = unzipSync(toXlsx([{ ...a, splitByTab: false }]));
+    assert.ok(strFromU8(single["xl/workbook.xml"]).includes('<sheet name="Sales  main form"'));
+    const csv = toCsv([a, b]).split("\r\n");
+    assert.ok(csv[0].startsWith("\uFEFFForm,#,Tab"));
+    assert.ok(csv[1].startsWith("Sales: main/form,1,Header"));
+    assert.equal(JSON.parse(toJson([a, b])).forms.length, 2);
+    assert.equal(JSON.parse(toJson([a])).name, "Sales: main/form");
+    assert.equal(toMarkdown([a, b]).split("\n---\n").length, 2);
 });

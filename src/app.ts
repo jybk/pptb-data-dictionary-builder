@@ -17,6 +17,20 @@ interface Options {
     splitByTab: boolean;
 }
 
+/** One built form or view. Several can be collected and exported together. */
+interface FormEntry {
+    /** Editable name; the worksheet name in Excel */
+    name: string;
+    target: ParsedTarget;
+    surface: SurfaceRecord;
+    layout: ParsedLayout;
+    tables: Map<string, TableMeta>;
+    lcid: number;
+    tabFilter: Set<string>;
+    pickerOptions: SurfaceOption[] | null;
+    pickerTable: string;
+}
+
 const LANGUAGES: Record<number, string> = {
     1030: "Danish",
     1031: "German",
@@ -37,6 +51,14 @@ const LANGUAGES: Record<number, string> = {
 
 const state = {
     connection: null as { name: string; url: string } | null,
+    /** Built forms and views, in the order they were added */
+    forms: [] as FormEntry[],
+    /** Index of the form on screen; -1 when there is none */
+    current: -1,
+    /** What the load in progress does when it succeeds */
+    mode: "replace" as "replace" | "add",
+    /** The form/view chooser is on screen instead of the result */
+    picking: false,
     target: null as ParsedTarget | null,
     notices: [] as Notice[],
     pickerOptions: null as SurfaceOption[] | null,
@@ -121,25 +143,40 @@ function setBusy(busy: boolean, label = "Build dictionary"): void {
     const button = $<HTMLButtonElement>("build");
     button.disabled = busy;
     button.textContent = label;
+    $<HTMLButtonElement>("add").disabled = busy;
 }
 
-function resetResult(): void {
-    state.surface = null;
-    state.layout = null;
+function currentForm(): FormEntry | null {
+    return state.forms[state.current] ?? null;
+}
+
+/** Puts one of the built forms on screen */
+function activate(index: number): void {
+    const form = state.forms[index];
+    state.current = form ? index : -1;
+    state.surface = form?.surface ?? null;
+    state.layout = form?.layout ?? null;
+    state.tables = form?.tables ?? new Map();
+    state.lcid = form?.lcid ?? 1033;
+    state.tabFilter = form?.tabFilter ?? new Set();
     state.dict = null;
-    state.tabFilter = new Set();
-    state.search = "";
-    $<HTMLInputElement>("search").value = "";
+    rebuild();
 }
 
-async function start(): Promise<void> {
+function removeForm(index: number): void {
+    state.forms.splice(index, 1);
+    activate(Math.min(index < state.current ? state.current - 1 : state.current, state.forms.length - 1));
+}
+
+/**
+ * Reads the address in the box. "replace" swaps out the form on screen, "add" keeps it
+ * and adds the new one next to it. Nothing on screen changes until the read succeeds.
+ */
+async function start(mode: "replace" | "add"): Promise<void> {
     if (state.busy) return;
     const runId = ++state.runId;
     const target = parseTarget($<HTMLInputElement>("url").value);
-    state.target = target;
     state.notices = [];
-    state.pickerOptions = null;
-    resetResult();
 
     if (target.kind === "unknown") {
         state.notices.push({
@@ -148,6 +185,10 @@ async function start(): Promise<void> {
         });
         return render();
     }
+    state.mode = mode;
+    state.target = target;
+    state.picking = false;
+    state.pickerOptions = null;
 
     setBusy(true, "Reading…");
     render();
@@ -189,6 +230,7 @@ async function showPicker(etn: string, appId: string | undefined, runId: number)
     if (!options.length) throw new Error(`No active forms or views were found for the table "${etn}". Check the table name and the active connection.`);
     state.pickerOptions = options;
     state.pickerTable = etn;
+    state.picking = true;
 }
 
 async function openOption(option: SurfaceOption): Promise<void> {
@@ -231,13 +273,34 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
     );
     if (runId !== state.runId) return;
 
-    state.surface = surface;
-    state.layout = layout;
-    state.tables = tables;
-    state.lcid = lcid;
-    state.tabFilter = new Set();
-    rebuild();
+    const entry: FormEntry = {
+        name: defaultName(surface.name),
+        target: state.target as ParsedTarget,
+        surface,
+        layout,
+        tables,
+        lcid,
+        tabFilter: new Set(),
+        pickerOptions: state.pickerOptions,
+        pickerTable: state.pickerTable,
+    };
+    if (state.mode === "add" || state.current < 0) state.forms.push(entry);
+    else state.forms[state.current] = entry;
+    state.picking = false;
+    activate(state.mode === "add" || state.current < 0 ? state.forms.length - 1 : state.current);
     if (state.dict?.multipleTables) state.columns.add("table");
+}
+
+/** Excel allows 31 characters in a worksheet name; keep names apart when the same form is added twice */
+function defaultName(name: string): string {
+    const base = name.trim().slice(0, 31) || "Form";
+    const taken = new Set(state.forms.filter((_, i) => state.mode === "add" || i !== state.current).map((f) => f.name.toLowerCase()));
+    let candidate = base;
+    for (let n = 2; taken.has(candidate.toLowerCase()); n++) {
+        const suffix = ` (${n})`;
+        candidate = base.slice(0, 31 - suffix.length) + suffix;
+    }
+    return candidate;
 }
 
 function rebuild(): void {
@@ -253,42 +316,48 @@ function activeColumns(): ColumnDef[] {
     return COLUMNS.filter((c) => state.columns.has(c.key));
 }
 
-function shownRows(): DictionaryRow[] {
-    if (!state.dict) return [];
+function filterRows(dict: Dictionary, tabFilter: Set<string>): DictionaryRow[] {
     const needle = state.search.trim().toLowerCase();
     const columns = activeColumns();
-    return state.dict.rows.filter((r) => {
-        if (state.tabFilter.size && !state.tabFilter.has(r.groupKey)) return false;
+    return dict.rows.filter((r) => {
+        if (tabFilter.size && !tabFilter.has(r.groupKey)) return false;
         if (!needle) return true;
         return columns.some((c) => String(r.values[c.key] ?? "").toLowerCase().includes(needle)) || String(r.values.logicalName).toLowerCase().includes(needle);
     });
 }
 
-function tableLabel(): string {
-    const s = state.surface;
-    if (!s) return "";
-    const meta = state.tables.get(s.etn);
-    return meta && meta.displayName !== s.etn ? `${meta.displayName} (${s.etn})` : s.etn;
+function shownRows(): DictionaryRow[] {
+    return state.dict ? filterRows(state.dict, state.tabFilter) : [];
 }
 
-function exportContext(): ExportContext {
-    const s = state.surface as SurfaceRecord;
-    const dict = state.dict as Dictionary;
-    const rows = shownRows();
+function tableLabel(form: FormEntry | null = currentForm()): string {
+    if (!form) return "";
+    const etn = form.surface.etn;
+    const meta = form.tables.get(etn);
+    return meta && meta.displayName !== etn ? `${meta.displayName} (${etn})` : etn;
+}
+
+function exportContext(form: FormEntry): ExportContext {
+    const s = form.surface;
+    // The form on screen already has its dictionary; the others are built with the same options
+    const dict = form === currentForm() && state.dict ? state.dict : buildDictionary(form.layout.items, s.etn, form.tables, { ...state.options, lcid: form.lcid });
+    const rows = filterRows(dict, form.tabFilter);
     const keys = new Set(rows.map((r) => r.groupKey));
     const settings = [
         state.options.includeHidden ? "hidden items included" : "hidden items left out",
         state.options.includeControls ? "subgrids and other controls included" : "fields only",
         state.options.uniqueOnly ? "first occurrence of each field only" : "",
-        state.tabFilter.size ? `only ${dict.tabs.filter((t) => state.tabFilter.has(t.key)).map((t) => t.label).join(", ")}` : "",
+        form.tabFilter.size ? `only ${dict.tabs.filter((t) => form.tabFilter.has(t.key)).map((t) => t.label).join(", ")}` : "",
         state.search.trim() ? `filtered by "${state.search.trim()}"` : "",
     ].filter(Boolean);
+    const name = form.name.trim() || s.name;
     return {
-        title: `Data dictionary: ${tableLabel()}, ${s.name}`,
+        name,
+        title: `Data dictionary: ${tableLabel(form)}, ${name}`,
         meta: [
-            ["Table", tableLabel()],
+            ["Table", tableLabel(form)],
             [s.typeLabel, s.name],
-            ["Source address", state.target?.raw ?? ""],
+            ["Source address", form.target.raw],
             ["Environment", state.connection ? `${state.connection.name} (${state.connection.url})` : ""],
             ["Generated", new Date().toLocaleString()],
             ["Rows", String(rows.length)],
@@ -323,21 +392,24 @@ async function save(name: string, content: string | Uint8Array, filterName: stri
 }
 
 async function runExport(kind: string): Promise<void> {
-    if (!state.surface || !state.dict) return;
-    const ctx = exportContext();
-    if (!ctx.rows.length) {
+    if (!state.forms.length) return;
+    // Every built form goes into the export; forms with nothing left after filtering are skipped
+    const ctxs = state.forms.map(exportContext).filter((c) => c.rows.length);
+    if (!ctxs.length) {
         state.notices = [{ level: "warning", text: "There are no rows to export with the current filters." }];
         return render();
     }
-    const base = `${fileSlug(`${state.surface.etn} ${state.surface.name}`)}-data-dictionary`;
+    const total = ctxs.reduce((n, c) => n + c.rows.length, 0);
+    const first = state.forms.find((f) => (f.name.trim() || f.surface.name) === ctxs[0].name) ?? state.forms[0];
+    const base = ctxs.length > 1 ? `data-dictionary-${ctxs.length}-forms` : `${fileSlug(`${first.surface.etn} ${ctxs[0].name}`)}-data-dictionary`;
     try {
-        if (kind === "xlsx") await save(`${base}.xlsx`, toXlsx(ctx), "Excel workbook", "xlsx");
-        else if (kind === "csv") await save(`${base}.csv`, toCsv(ctx), "CSV", "csv");
-        else if (kind === "md") await save(`${base}.md`, toMarkdown(ctx), "Markdown", "md");
-        else if (kind === "json") await save(`${base}.json`, toJson(ctx), "JSON", "json");
+        if (kind === "xlsx") await save(`${base}.xlsx`, toXlsx(ctxs), "Excel workbook", "xlsx");
+        else if (kind === "csv") await save(`${base}.csv`, toCsv(ctxs), "CSV", "csv");
+        else if (kind === "md") await save(`${base}.md`, toMarkdown(ctxs), "Markdown", "md");
+        else if (kind === "json") await save(`${base}.json`, toJson(ctxs), "JSON", "json");
         else if (kind === "copy") {
-            await window.toolboxAPI.utils.copyToClipboard(toTsv(ctx));
-            await notify("Copied", `${ctx.rows.length} rows are on the clipboard. Paste into Excel or a document.`);
+            await window.toolboxAPI.utils.copyToClipboard(toTsv(ctxs));
+            await notify("Copied", `${total} rows are on the clipboard. Paste into Excel or a document.`);
         }
     } catch (error) {
         state.notices = [{ level: "error", text: `The export did not complete: ${errorText(error)}` }];
@@ -375,7 +447,7 @@ function renderPicker(): void {
     };
     const forms = group("form", "Forms");
     const views = group("view", "Views");
-    $("picker-list").innerHTML = prefer === "view" ? views + forms : forms + views;
+    $("picker-list").innerHTML = (prefer === "view" ? views + forms : forms + views) + (state.forms.length ? `<p><button type="button" class="linklike" id="cancel-picker">Cancel</button></p>` : "");
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -393,7 +465,22 @@ function renderSummary(): void {
     $("summary").innerHTML =
         `<span class="title">${esc(s.name)}</span>` +
         `<span class="meta">${esc(s.typeLabel)} · ${esc(tableLabel())} · ${parts.join(" · ")}</span>` +
-        (state.pickerOptions ? `<button type="button" class="linklike" id="back-to-picker">Choose another form or view</button>` : "");
+        (currentForm()?.pickerOptions ? `<button type="button" class="linklike" id="back-to-picker">Choose another form or view</button>` : "");
+    const input = $<HTMLInputElement>("form-name");
+    if (document.activeElement !== input) input.value = currentForm()?.name ?? "";
+}
+
+/** Strip of built forms, shown once there is more than one */
+function renderForms(): void {
+    const el = $("forms");
+    el.hidden = state.forms.length < 2;
+    el.innerHTML = state.forms
+        .map(
+            (f, i) =>
+                `<span class="formtab" data-current="${i === state.current}"><button type="button" class="formtab-open" data-form="${i}" title="${esc(f.surface.typeLabel)}: ${esc(f.surface.name)}">${esc(f.name.trim() || f.surface.name)}</button>` +
+                `<button type="button" class="formtab-remove" data-remove-form="${i}" aria-label="Remove ${esc(f.name.trim() || f.surface.name)}" title="Remove from this dictionary">×</button></span>`,
+        )
+        .join("");
 }
 
 function renderTabs(): void {
@@ -416,7 +503,7 @@ function renderOptions(): void {
         check("includeHidden", isForm ? "Include hidden tabs, sections and fields" : "Include hidden columns") +
         (isForm ? check("includeControls", "Include subgrids, quick views and web resources") : "") +
         check("uniqueOnly", "List each field once (first appearance)") +
-        (isForm ? check("splitByTab", "Excel: one worksheet per tab") : "") +
+        (isForm ? check("splitByTab", state.forms.length > 1 ? "Excel: one worksheet per tab (single form only)" : "Excel: one worksheet per tab") : "") +
         (languages.length > 1
             ? `<div class="field"><span>Label language</span><select id="language">${languages.map((l) => `<option value="${l}" ${l === state.lcid ? "selected" : ""}>${esc(LANGUAGES[l] ?? `Language ${l}`)}</option>`).join("")}</select></div>`
             : "");
@@ -467,18 +554,20 @@ function renderGrid(): void {
     if (dict.repeatsSkipped) notes.push(`${plural(dict.repeatsSkipped, "repeat appearance")} left out.`);
     if (dict.missingMetadata) notes.push(`${plural(dict.missingMetadata, "field")} without column details; turn on the Notes column to see why.`);
     if (dict.hiddenSkipped || dict.controlsSkipped) notes.push("Change this under Options.");
+    if (state.forms.length > 1) notes.push(`Exports include all ${state.forms.length} forms, one Excel worksheet each.`);
     $("footnote").textContent = notes.join(" ");
 }
 
 function render(): void {
     renderNotices();
-    const hasResult = !!(state.surface && state.dict);
-    const hasPicker = !hasResult && !!state.pickerOptions;
+    const hasPicker = state.picking && !!state.pickerOptions;
+    const hasResult = !hasPicker && !!(state.surface && state.dict);
     $("picker").hidden = !hasPicker;
     $("result").hidden = !hasResult;
     $("empty").hidden = hasResult || hasPicker || state.busy || state.notices.some((n) => n.level === "error");
     if (hasPicker) renderPicker();
     if (hasResult) {
+        renderForms();
         renderSummary();
         renderTabs();
         renderOptions();
@@ -496,9 +585,16 @@ function closeMenus(except?: Element | null): void {
 }
 
 function wire(): void {
-    $("build").addEventListener("click", () => void start());
+    $("build").addEventListener("click", () => void start("replace"));
+    $("add").addEventListener("click", () => void start("add"));
     $("url").addEventListener("keydown", (e) => {
-        if ((e as KeyboardEvent).key === "Enter") void start();
+        if ((e as KeyboardEvent).key === "Enter") void start("replace");
+    });
+    $("form-name").addEventListener("input", (e) => {
+        const form = currentForm();
+        if (!form) return;
+        form.name = (e.target as HTMLInputElement).value;
+        renderForms(); // keeps the strip in step without touching the box being typed in
     });
     $("search").addEventListener("input", (e) => {
         state.search = (e.target as HTMLInputElement).value;
@@ -516,7 +612,27 @@ function wire(): void {
             return;
         }
         if (el.id === "back-to-picker") {
-            resetResult();
+            const form = currentForm();
+            if (!form?.pickerOptions) return;
+            state.mode = "replace";
+            state.target = form.target;
+            state.pickerOptions = form.pickerOptions;
+            state.pickerTable = form.pickerTable;
+            state.picking = true;
+            return render();
+        }
+        if (el.id === "cancel-picker") {
+            state.picking = false;
+            return render();
+        }
+        const remove = el.closest<HTMLElement>("[data-remove-form]");
+        if (remove) {
+            removeForm(Number(remove.dataset.removeForm));
+            return render();
+        }
+        const open = el.closest<HTMLElement>("[data-form]");
+        if (open) {
+            activate(Number(open.dataset.form));
             return render();
         }
         const chip = el.closest<HTMLElement>("[data-tab]");
@@ -555,6 +671,8 @@ function wire(): void {
             renderGrid();
         } else if (el.id === "language") {
             state.lcid = Number(el.value);
+            const form = currentForm();
+            if (form) form.lcid = state.lcid;
             rebuild();
             render();
         }

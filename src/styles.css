@@ -535,3 +535,79 @@ tr.none td {
     color: var(--muted);
     font-size: 12px;
 }
+
+.forms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--line);
+}
+
+.forms[hidden] {
+    display: none;
+}
+
+.formtab {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: -1px;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    color: var(--muted);
+}
+
+.formtab[data-current="true"] {
+    border-color: var(--line);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+}
+
+.formtab button {
+    height: 30px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.formtab-open {
+    padding: 0 4px 0 12px;
+}
+
+.formtab-remove {
+    padding: 0 9px 0 5px;
+    border-radius: 4px;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.formtab-remove:hover {
+    color: #b3261e;
+}
+
+.summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px 18px;
+}
+
+.summary-row .summary {
+    padding-bottom: 6px;
+}
+
+.name-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.name-field input {
+    width: 250px;
+    font-weight: 600;
+}

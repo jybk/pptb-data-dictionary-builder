@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- **Add form**: collect several forms and views in one dictionary. Exports cover all of them, with one Excel worksheet per form.
+- **Form / Excel tab name** box: name each form; the name is used on the form strip and as the worksheet name.
+- A failed or cancelled read no longer clears the dictionary on screen.
+
 ## 1.1.0
 
 - Tab buttons are multi-select: show any combination of tabs; exports follow the selection.

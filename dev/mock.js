@@ -51,6 +51,18 @@ document.write('<script src="fixtures.js"></scr' + 'ipt>');
             const opts = new URLSearchParams(location.search).get("opts");
             const tabs = new URLSearchParams(location.search).get("tabs");
             if (tabs) setTimeout(() => tabs.split(",").forEach((t) => document.querySelector(`[data-tab="${t}"]`)?.click()), 1800);
+            const add = new URLSearchParams(location.search).get("add");
+            if (add) {
+                setTimeout(() => {
+                    document.getElementById("url").value = `${base}&pagetype=entitylist&etn=account&viewid=${VIEW_ID}&viewType=1039`;
+                    document.getElementById("add").click();
+                }, 2200);
+                setTimeout(() => {
+                    const name = document.getElementById("form-name");
+                    name.value = add;
+                    name.dispatchEvent(new Event("input", { bubbles: true }));
+                }, 3600);
+            }
             if (opts) setTimeout(() => opts.split(",").forEach((o) => document.querySelector(`[data-option="${o}"]`)?.click()), 1500);
         });
     }
