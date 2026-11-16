@@ -23,7 +23,7 @@ Paste another address and press **Add form** again. Each form or view appears on
 
 With two or more forms, the **Also on** column lists the other forms on the strip that contain the same field, so shared fields stand out. It compares only the forms you added, using the current options (hidden items count only when they are included).
 
-Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. **Replace current** swaps the form on screen for the address in the box and leaves the others alone.
+Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. To swap a form for another, add the new one and remove the old one with ×.
 
 ## Output
 

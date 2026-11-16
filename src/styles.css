@@ -611,7 +611,3 @@ tr.none td {
     width: 250px;
     font-weight: 600;
 }
-
-.btn[hidden] {
-    display: none;
-}

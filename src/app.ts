@@ -145,7 +145,6 @@ function setBusy(busy: boolean): void {
     const add = $<HTMLButtonElement>("add");
     add.disabled = busy;
     add.textContent = busy ? "Reading…" : "Add form";
-    $<HTMLButtonElement>("replace").disabled = busy;
 }
 
 function currentForm(): FormEntry | null {
@@ -171,8 +170,9 @@ function removeForm(index: number): void {
 }
 
 /**
- * Reads the address in the box. "replace" swaps out the form on screen, "add" keeps it
- * and adds the new one next to it. Nothing on screen changes until the read succeeds.
+ * Reads the address in the box and adds it as a new form ("add"). "replace" is only used
+ * by "Choose another form or view", which swaps the form on screen for another one of the
+ * same table. Nothing on screen changes until the read succeeds.
  */
 async function start(mode: "replace" | "add"): Promise<void> {
     if (state.busy) return;
@@ -579,8 +579,6 @@ function render(): void {
     const hasPicker = state.picking && !!state.pickerOptions;
     const hasResult = !hasPicker && !!(state.surface && state.dict);
     $("picker").hidden = !hasPicker;
-    // Replacing only means something once a form is on screen
-    $("replace").hidden = !state.forms.length;
     $("result").hidden = !hasResult;
     $("empty").hidden = hasResult || hasPicker || state.busy || state.notices.some((n) => n.level === "error");
     if (hasPicker) renderPicker();
@@ -604,9 +602,7 @@ function closeMenus(except?: Element | null): void {
 
 function wire(): void {
     $("add").addEventListener("click", () => void start("add"));
-    $("replace").addEventListener("click", () => void start("replace"));
     $("url").addEventListener("keydown", (e) => {
-        // Enter adds rather than replaces, so it can never discard a form
         if ((e as KeyboardEvent).key === "Enter") void start("add");
     });
     $("form-name").addEventListener("input", (e) => {
