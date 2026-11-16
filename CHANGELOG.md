@@ -6,6 +6,7 @@
 - **Form / Excel tab name** box: name each form; the name is used on the form strip and as the worksheet name.
 - **Also on** column: marks fields that also appear on other forms in the dictionary.
 - A failed or cancelled read no longer clears the dictionary on screen.
+- Description reworded in the style of Dataverse M Builder.
 
 ## 1.1.0
 

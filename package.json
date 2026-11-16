@@ -2,7 +2,7 @@
     "name": "@jybk/pptb-data-dictionary-builder",
     "version": "1.2.0",
     "displayName": "Data Dictionary Builder",
-    "description": "Paste a model-driven app form or view URL and get a data dictionary of the fields on it, in order of appearance, grouped by tab and section.",
+    "description": "Generate data dictionaries for Excel, CSV, Markdown and JSON from model-driven app forms and views, with fields in screen order, tabs and sections, and choice values.",
     "main": "index.html",
     "icon": "icons/data-dictionary-builder.svg",
     "license": "MIT",
