@@ -602,6 +602,16 @@ function closeMenus(except?: Element | null): void {
 
 function wire(): void {
     $("add").addEventListener("click", () => void start("add"));
+    // The clear button only shows while there is something to clear
+    const url = $<HTMLInputElement>("url");
+    const syncClear = () => ($("clear-url").hidden = !url.value);
+    url.addEventListener("input", syncClear);
+    $("clear-url").addEventListener("click", () => {
+        url.value = "";
+        syncClear();
+        url.focus();
+    });
+    syncClear();
     $("url").addEventListener("keydown", (e) => {
         if ((e as KeyboardEvent).key === "Enter") void start("add");
     });

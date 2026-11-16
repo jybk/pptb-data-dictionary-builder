@@ -47,6 +47,7 @@ document.write('<script src="fixtures.js"></scr' + 'ipt>');
             const base = "https://contoso-dev.crm4.dynamics.com/main.aspx?appid=5b6a1c3e-0f1d-4c1b-9d6e-2f6a7b8c9d0e";
             document.getElementById("url").value =
                 demo === "view" ? `${base}&pagetype=entitylist&etn=account&viewid=${VIEW_ID}&viewType=1039` : demo === "table" ? `${base}&pagetype=entityrecord&etn=account&id=3f2504e0-4f89-11d3-9a0c-0305e82c3301` : `${base}&pagetype=entityrecord&etn=account&id=3f2504e0-4f89-11d3-9a0c-0305e82c3301&formid=${FORM_ID}`;
+            document.getElementById("url").dispatchEvent(new Event("input"));
             setTimeout(() => document.getElementById("add").click(), 400);
             const opts = new URLSearchParams(location.search).get("opts");
             const tabs = new URLSearchParams(location.search).get("tabs");
