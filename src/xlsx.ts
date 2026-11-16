@@ -10,6 +10,8 @@ export interface SheetSpec {
     /** Column widths in characters */
     widths: number[];
     rows: (string | number)[][];
+    /** Per column: true keeps the text on one line instead of wrapping it */
+    noWrap?: boolean[];
     /** Add an autofilter over the header row (default true) */
     filter?: boolean;
 }
@@ -61,7 +63,7 @@ function sheetXml(sheet: SheetSpec): string {
     const lastCol = colName(Math.max(sheet.headers.length, 1) - 1);
     const cols = sheet.widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.min(Math.max(w, 4), 80) + 1}" customWidth="1"/>`).join("");
     const head = `<row r="1">${sheet.headers.map((h, i) => cell(`${colName(i)}1`, h, 1)).join("")}</row>`;
-    const body = sheet.rows.map((row, r) => `<row r="${r + 2}">${row.map((v, c) => cell(`${colName(c)}${r + 2}`, v, 2)).join("")}</row>`).join("");
+    const body = sheet.rows.map((row, r) => `<row r="${r + 2}">${row.map((v, c) => cell(`${colName(c)}${r + 2}`, v, sheet.noWrap?.[c] ? 3 : 2)).join("")}</row>`).join("");
     const filter = sheet.filter === false ? "" : `<autoFilter ref="A1:${lastCol}${sheet.rows.length + 1}"/>`;
     return (
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -82,10 +84,11 @@ const STYLES =
     `<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E5F"/><bgColor indexed="64"/></patternFill></fill></fills>` +
     `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D7DE"/></left><right style="thin"><color rgb="FFD0D7DE"/></right><top style="thin"><color rgb="FFD0D7DE"/></top><bottom style="thin"><color rgb="FFD0D7DE"/></bottom><diagonal/></border></borders>` +
     `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
-    `<cellXfs count="3">` +
+    `<cellXfs count="4">` +
     `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
     `<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>` +
     `<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>` +
+    `<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>` +
     `</cellXfs>` +
     `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
     `</styleSheet>`;

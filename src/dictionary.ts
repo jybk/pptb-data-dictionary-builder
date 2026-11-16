@@ -323,7 +323,7 @@ export function markShared(dictionaries: { name: string; dict: Dictionary }[]): 
     dictionaries.forEach(({ dict }, i) => {
         for (const r of dict.rows) {
             const others = r.isField ? [...(where.get(key(r)) ?? [])].filter((j) => j !== i) : [];
-            r.values.alsoOn = others.map((j) => dictionaries[j].name).join("\n");
+            r.values.alsoOn = others.map((j) => dictionaries[j].name).join(", ");
         }
     });
 }

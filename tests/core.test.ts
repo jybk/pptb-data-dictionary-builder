@@ -167,11 +167,22 @@ test("fields shared between forms in the dictionary are marked on both sides", (
         { name: "Quick", dict: quick },
     ]);
     const on = (d: typeof form, field: string) => d.rows.filter((r) => r.values.logicalName === field).map((r) => r.values.alsoOn);
-    assert.deepEqual(on(form, "name"), ["Accounts view\nQuick", "Accounts view\nQuick"]); // both appearances on the main form
+    assert.deepEqual(on(form, "name"), ["Accounts view, Quick", "Accounts view, Quick"]); // both appearances on the main form
     assert.deepEqual(on(form, "ownerid"), ["Quick"]);
     assert.deepEqual(on(form, "revenue"), [""]);
-    assert.deepEqual(on(view, "name"), ["Main\nQuick"]);
+    assert.deepEqual(on(view, "name"), ["Main, Quick"]);
     assert.deepEqual(on(view, "emailaddress1"), [""]); // contact.emailaddress1 is not account.emailaddress1
     markShared([{ name: "Main", dict: form }]);
     assert.deepEqual(on(form, "name"), ["", ""]); // cleared again when the other forms are removed
+});
+
+test("Also on stays on one line in Excel: comma separated, cell not wrapped", () => {
+    const form = buildDictionary(parseFormXml(F.formXml, parse).items, "account", tables, defaults);
+    const view = buildDictionary(parseViewLayout(F.layoutXml, F.fetchXml, parse).items, "account", tables, defaults);
+    const quick = buildDictionary(parseFormXml(F.formXml, parse).items.slice(0, 3), "account", tables, defaults);
+    markShared([{ name: "Main", dict: form }, { name: "Accounts view", dict: view }, { name: "Quick", dict: quick }]);
+    const columns = COLUMNS.filter((c) => c.on || c.key === "alsoOn");
+    const sheet = strFromU8(unzipSync(toXlsx([{ name: "Main", title: "T", meta: [], columns, rows: form.rows, tabs: form.tabs, choices: [], splitByTab: false }]))["xl/worksheets/sheet1.xml"]);
+    const cell = /<c r="[A-Z]+\d+" s="(\d)" t="inlineStr"><is><t xml:space="preserve">Accounts view, Quick<\/t>/.exec(sheet);
+    assert.equal(cell?.[1], "3"); // style 3 = no wrap
 });

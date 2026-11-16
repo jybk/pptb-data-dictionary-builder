@@ -83,14 +83,16 @@ export function toXlsx(ctxs: ExportContext[]): Uint8Array {
     for (const ctx of ctxs) {
         const headers = ctx.columns.map((c) => c.header);
         const widths = ctx.columns.map((c) => c.width);
+        // The list of other forms reads best on one line, so its cells do not wrap
+        const noWrap = ctx.columns.map((c) => c.key === "alsoOn");
         // One worksheet per tab only makes sense for a single form; several forms get one worksheet each
         if (!many && ctx.splitByTab && ctx.tabs.length > 1) {
             for (const tab of ctx.tabs) {
                 const rows = ctx.rows.filter((r) => r.groupKey === tab.key);
-                if (rows.length) sheets.push({ name: tab.label, headers, widths, rows: matrix(ctx, rows) });
+                if (rows.length) sheets.push({ name: tab.label, headers, widths, noWrap, rows: matrix(ctx, rows) });
             }
         } else {
-            sheets.push({ name: ctx.name || "Data Dictionary", headers, widths, rows: matrix(ctx) });
+            sheets.push({ name: ctx.name || "Data Dictionary", headers, widths, noWrap, rows: matrix(ctx) });
         }
     }
     const choices = ctxs.flatMap((ctx) => ctx.choices.map((c) => [...(many ? [ctx.name] : []), c.table, c.logicalName, c.label, c.value, c.choice]));
