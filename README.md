@@ -9,7 +9,7 @@ Other metadata exporters list every column of a table. This one lists what a use
 ## Use
 
 1. Open the tool in ToolBox and select a connection.
-2. Paste an address and press **Build dictionary**. Accepted:
+2. Paste an address and press **Add form** (or Enter). Accepted:
    - a record address from a model-driven app (`…/main.aspx?appid=…&pagetype=entityrecord&etn=account&id=…&formid=…`)
    - a view address (`…&pagetype=entitylist&etn=account&viewid=…`)
    - a form or view designer address from make.powerapps.com
@@ -19,11 +19,11 @@ Other metadata exporters list every column of a table. This one lists what a use
 
 ### Several forms in one dictionary
 
-After the first form is built, paste another address and press **Add form** instead of **Build dictionary**. Each form or view appears on a strip above the table; click one to show it, or × to remove it. Give each a name in the **Form / Excel tab name** box (31 characters at most, the Excel limit).
+Paste another address and press **Add form** again. Each form or view appears on a strip above the table; click one to show it, or × to remove it. Give each a name in the **Form / Excel tab name** box (31 characters at most, the Excel limit).
 
 With two or more forms, the **Also on** column lists the other forms on the strip that contain the same field, so shared fields stand out. It compares only the forms you added, using the current options (hidden items count only when they are included).
 
-Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. **Build dictionary** replaces the form on screen and leaves the others alone.
+Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. **Replace current** swaps the form on screen for the address in the box and leaves the others alone.
 
 ## Output
 

@@ -2,7 +2,7 @@
 
 ## 1.2.0
 
-- **Add form**: collect several forms and views in one dictionary. Exports cover all of them, with one Excel worksheet per form.
+- **Add form** replaces the Build dictionary button and can be used repeatedly: collect several forms and views in one dictionary. **Replace current** swaps out the form on screen. Exports cover all of them, with one Excel worksheet per form.
 - **Form / Excel tab name** box: name each form; the name is used on the form strip and as the worksheet name.
 - **Also on** column: marks fields that also appear on other forms in the dictionary.
 - A failed or cancelled read no longer clears the dictionary on screen.

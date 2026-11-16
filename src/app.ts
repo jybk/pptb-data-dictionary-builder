@@ -110,7 +110,7 @@ async function refreshConnection(): Promise<void> {
     el.classList.toggle("missing", !state.connection);
     el.innerHTML = state.connection
         ? `<strong>${esc(state.connection.name)}</strong> · ${esc(state.connection.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}`
-        : "No connection. Select one in ToolBox, then build.";
+        : "No connection. Select one in ToolBox, then add a form.";
 }
 
 async function applyTheme(): Promise<void> {
@@ -140,12 +140,12 @@ function saveSettings(): void {
 
 /* ---------- loading ---------- */
 
-function setBusy(busy: boolean, label = "Build dictionary"): void {
+function setBusy(busy: boolean): void {
     state.busy = busy;
-    const button = $<HTMLButtonElement>("build");
-    button.disabled = busy;
-    button.textContent = label;
-    $<HTMLButtonElement>("add").disabled = busy;
+    const add = $<HTMLButtonElement>("add");
+    add.disabled = busy;
+    add.textContent = busy ? "Reading…" : "Add form";
+    $<HTMLButtonElement>("replace").disabled = busy;
 }
 
 function currentForm(): FormEntry | null {
@@ -192,7 +192,7 @@ async function start(mode: "replace" | "add"): Promise<void> {
     state.picking = false;
     state.pickerOptions = null;
 
-    setBusy(true, "Reading…");
+    setBusy(true);
     render();
     try {
         await refreshConnection();
@@ -239,7 +239,7 @@ async function openOption(option: SurfaceOption): Promise<void> {
     if (state.busy) return;
     const runId = ++state.runId;
     state.notices = state.notices.filter((n) => n.level === "warning" && n.text.startsWith("The URL points"));
-    setBusy(true, "Reading…");
+    setBusy(true);
     try {
         const surface = option.kind === "form" ? await loadForm(option.id) : await loadView(option.id);
         if (!surface) throw new Error(`"${option.name}" could not be read. It may have been deleted, or you may not have access to it.`);
@@ -579,6 +579,8 @@ function render(): void {
     const hasPicker = state.picking && !!state.pickerOptions;
     const hasResult = !hasPicker && !!(state.surface && state.dict);
     $("picker").hidden = !hasPicker;
+    // Replacing only means something once a form is on screen
+    $("replace").hidden = !state.forms.length;
     $("result").hidden = !hasResult;
     $("empty").hidden = hasResult || hasPicker || state.busy || state.notices.some((n) => n.level === "error");
     if (hasPicker) renderPicker();
@@ -601,10 +603,11 @@ function closeMenus(except?: Element | null): void {
 }
 
 function wire(): void {
-    $("build").addEventListener("click", () => void start("replace"));
     $("add").addEventListener("click", () => void start("add"));
+    $("replace").addEventListener("click", () => void start("replace"));
     $("url").addEventListener("keydown", (e) => {
-        if ((e as KeyboardEvent).key === "Enter") void start("replace");
+        // Enter adds rather than replaces, so it can never discard a form
+        if ((e as KeyboardEvent).key === "Enter") void start("add");
     });
     $("form-name").addEventListener("input", (e) => {
         const form = currentForm();
