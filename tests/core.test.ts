@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { DOMParser } from "@xmldom/xmldom";
 import { unzipSync, strFromU8 } from "fflate";
 import "../dev/fixtures.js";
-import { buildDictionary, COLUMNS, type TableMeta } from "../src/dictionary";
+import { buildDictionary, COLUMNS, markShared, type TableMeta } from "../src/dictionary";
 import { toCsv, toJson, toMarkdown, toXlsx, type ExportContext } from "../src/exporters";
 import { parseFormXml, parseViewLayout } from "../src/layoutParser";
 import { hostMismatch, parseTarget } from "../src/urlParser";
@@ -155,4 +155,23 @@ test("several forms: one worksheet per form under its given name, Form column el
     assert.equal(JSON.parse(toJson([a, b])).forms.length, 2);
     assert.equal(JSON.parse(toJson([a])).name, "Sales: main/form");
     assert.equal(toMarkdown([a, b]).split("\n---\n").length, 2);
+});
+
+test("fields shared between forms in the dictionary are marked on both sides", () => {
+    const form = buildDictionary(parseFormXml(F.formXml, parse).items, "account", tables, defaults);
+    const view = buildDictionary(parseViewLayout(F.layoutXml, F.fetchXml, parse).items, "account", tables, defaults);
+    const quick = buildDictionary(parseFormXml(F.formXml, parse).items.slice(0, 3), "account", tables, defaults);
+    markShared([
+        { name: "Main", dict: form },
+        { name: "Accounts view", dict: view },
+        { name: "Quick", dict: quick },
+    ]);
+    const on = (d: typeof form, field: string) => d.rows.filter((r) => r.values.logicalName === field).map((r) => r.values.alsoOn);
+    assert.deepEqual(on(form, "name"), ["Accounts view\nQuick", "Accounts view\nQuick"]); // both appearances on the main form
+    assert.deepEqual(on(form, "ownerid"), ["Quick"]);
+    assert.deepEqual(on(form, "revenue"), [""]);
+    assert.deepEqual(on(view, "name"), ["Main\nQuick"]);
+    assert.deepEqual(on(view, "emailaddress1"), [""]); // contact.emailaddress1 is not account.emailaddress1
+    markShared([{ name: "Main", dict: form }]);
+    assert.deepEqual(on(form, "name"), ["", ""]); // cleared again when the other forms are removed
 });

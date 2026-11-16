@@ -1,6 +1,6 @@
 /// <reference types="@pptb/types" />
 import { listSurfaces, loadForm, loadTable, loadView, type SurfaceOption, type SurfaceRecord } from "./dataverse";
-import { buildDictionary, COLUMNS, type ColumnDef, type Dictionary, type DictionaryRow, type TableMeta } from "./dictionary";
+import { buildDictionary, COLUMNS, markShared, type ColumnDef, type Dictionary, type DictionaryRow, type TableMeta } from "./dictionary";
 import { fileSlug, toCsv, toJson, toMarkdown, toTsv, toXlsx, type ExportContext } from "./exporters";
 import { parseFormXml, parseViewLayout, type ParsedLayout } from "./layoutParser";
 import { hostMismatch, parseTarget, type ParsedTarget } from "./urlParser";
@@ -27,6 +27,8 @@ interface FormEntry {
     tables: Map<string, TableMeta>;
     lcid: number;
     tabFilter: Set<string>;
+    /** Built with the current options; null until the first rebuild */
+    dict: Dictionary | null;
     pickerOptions: SurfaceOption[] | null;
     pickerTable: string;
 }
@@ -281,6 +283,7 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
         tables,
         lcid,
         tabFilter: new Set(),
+        dict: null,
         pickerOptions: state.pickerOptions,
         pickerTable: state.pickerTable,
     };
@@ -289,6 +292,8 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
     state.picking = false;
     activate(state.mode === "add" || state.current < 0 ? state.forms.length - 1 : state.current);
     if (state.dict?.multipleTables) state.columns.add("table");
+    // With a second form there is something to compare, so show where fields are shared
+    if (state.forms.length === 2 && state.mode === "add") state.columns.add("alsoOn");
 }
 
 /** Excel allows 31 characters in a worksheet name; keep names apart when the same form is added twice */
@@ -303,11 +308,23 @@ function defaultName(name: string): string {
     return candidate;
 }
 
+function formName(form: FormEntry): string {
+    return form.name.trim() || form.surface.name;
+}
+
+/** Rebuilds every form's dictionary with the current options, then marks the fields they share */
 function rebuild(): void {
-    if (!state.surface || !state.layout) return;
-    state.dict = buildDictionary(state.layout.items, state.surface.etn, state.tables, { ...state.options, lcid: state.lcid });
-    const keys = new Set(state.dict.tabs.map((t) => t.key));
-    for (const key of [...state.tabFilter]) if (!keys.has(key)) state.tabFilter.delete(key);
+    for (const form of state.forms) {
+        form.dict = buildDictionary(form.layout.items, form.surface.etn, form.tables, { ...state.options, lcid: form.lcid });
+        const keys = new Set(form.dict.tabs.map((t) => t.key));
+        for (const key of [...form.tabFilter]) if (!keys.has(key)) form.tabFilter.delete(key);
+    }
+    markSharedFields();
+    state.dict = currentForm()?.dict ?? null;
+}
+
+function markSharedFields(): void {
+    markShared(state.forms.flatMap((form) => (form.dict ? [{ name: formName(form), dict: form.dict }] : [])));
 }
 
 /* ---------- derived views ---------- */
@@ -339,8 +356,7 @@ function tableLabel(form: FormEntry | null = currentForm()): string {
 
 function exportContext(form: FormEntry): ExportContext {
     const s = form.surface;
-    // The form on screen already has its dictionary; the others are built with the same options
-    const dict = form === currentForm() && state.dict ? state.dict : buildDictionary(form.layout.items, s.etn, form.tables, { ...state.options, lcid: form.lcid });
+    const dict = form.dict as Dictionary;
     const rows = filterRows(dict, form.tabFilter);
     const keys = new Set(rows.map((r) => r.groupKey));
     const settings = [
@@ -350,7 +366,7 @@ function exportContext(form: FormEntry): ExportContext {
         form.tabFilter.size ? `only ${dict.tabs.filter((t) => form.tabFilter.has(t.key)).map((t) => t.label).join(", ")}` : "",
         state.search.trim() ? `filtered by "${state.search.trim()}"` : "",
     ].filter(Boolean);
-    const name = form.name.trim() || s.name;
+    const name = formName(form);
     return {
         name,
         title: `Data dictionary: ${tableLabel(form)}, ${name}`,
@@ -400,7 +416,7 @@ async function runExport(kind: string): Promise<void> {
         return render();
     }
     const total = ctxs.reduce((n, c) => n + c.rows.length, 0);
-    const first = state.forms.find((f) => (f.name.trim() || f.surface.name) === ctxs[0].name) ?? state.forms[0];
+    const first = state.forms.find((f) => formName(f) === ctxs[0].name) ?? state.forms[0];
     const base = ctxs.length > 1 ? `data-dictionary-${ctxs.length}-forms` : `${fileSlug(`${first.surface.etn} ${ctxs[0].name}`)}-data-dictionary`;
     try {
         if (kind === "xlsx") await save(`${base}.xlsx`, toXlsx(ctxs), "Excel workbook", "xlsx");
@@ -477,8 +493,8 @@ function renderForms(): void {
     el.innerHTML = state.forms
         .map(
             (f, i) =>
-                `<span class="formtab" data-current="${i === state.current}"><button type="button" class="formtab-open" data-form="${i}" title="${esc(f.surface.typeLabel)}: ${esc(f.surface.name)}">${esc(f.name.trim() || f.surface.name)}</button>` +
-                `<button type="button" class="formtab-remove" data-remove-form="${i}" aria-label="Remove ${esc(f.name.trim() || f.surface.name)}" title="Remove from this dictionary">×</button></span>`,
+                `<span class="formtab" data-current="${i === state.current}"><button type="button" class="formtab-open" data-form="${i}" title="${esc(f.surface.typeLabel)}: ${esc(f.surface.name)}">${esc(formName(f))}</button>` +
+                `<button type="button" class="formtab-remove" data-remove-form="${i}" aria-label="Remove ${esc(formName(f))}" title="Remove from this dictionary">×</button></span>`,
         )
         .join("");
 }
@@ -594,7 +610,10 @@ function wire(): void {
         const form = currentForm();
         if (!form) return;
         form.name = (e.target as HTMLInputElement).value;
-        renderForms(); // keeps the strip in step without touching the box being typed in
+        // Keep the strip and the "Also on" column in step without touching the box being typed in
+        renderForms();
+        markSharedFields();
+        renderGrid();
     });
     $("search").addEventListener("input", (e) => {
         state.search = (e.target as HTMLInputElement).value;

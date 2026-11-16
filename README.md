@@ -21,6 +21,8 @@ Other metadata exporters list every column of a table. This one lists what a use
 
 After the first form is built, paste another address and press **Add form** instead of **Build dictionary**. Each form or view appears on a strip above the table; click one to show it, or × to remove it. Give each a name in the **Form / Excel tab name** box (31 characters at most, the Excel limit).
 
+With two or more forms, the **Also on** column lists the other forms on the strip that contain the same field, so shared fields stand out. It compares only the forms you added, using the current options (hidden items count only when they are included).
+
 Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. **Build dictionary** replaces the form on screen and leaves the others alone.
 
 ## Output
@@ -34,6 +36,7 @@ Rows follow the order of appearance: header, each tab left to right (sections an
 | Required, Read-only | on | Read-only = locked on the form, or the column can never be edited |
 | Allowed Values, Default, Lookup Targets | on | Choice values as `value = label` |
 | Description, Custom | on | |
+| Also on | off | Turns on when a second form is added |
 | Display Name, Schema Name, Table, Visible, Source, Searchable, Audited, Column Security, Control, Notes | off | Turn on under **Columns** |
 
 Options: include hidden tabs/sections/fields, include subgrids/quick views/web resources, list each field once, one Excel worksheet per tab, label language (when the form has labels in more than one language).

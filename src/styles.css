@@ -496,6 +496,7 @@ td.c-label {
 }
 
 td.c-choices,
+td.c-alsoOn,
 td.c-notes {
     white-space: pre-line;
 }

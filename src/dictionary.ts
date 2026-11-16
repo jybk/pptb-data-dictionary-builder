@@ -53,6 +53,7 @@ export const COLUMNS: ColumnDef[] = [
     { key: "targets", header: "Lookup Targets", on: true, width: 22, mono: true },
     { key: "description", header: "Description", on: true, width: 44 },
     { key: "custom", header: "Custom", on: true, width: 8 },
+    { key: "alsoOn", header: "Also on", on: false, width: 24 },
     { key: "source", header: "Source", on: false, width: 12 },
     { key: "searchable", header: "Searchable", on: false, width: 11 },
     { key: "audited", header: "Audited", on: false, width: 9 },
@@ -284,6 +285,8 @@ export function buildDictionary(items: UiItem[], ownTable: string, tables: Map<s
             searchable: a ? yesNo(a.IsValidForAdvancedFind?.Value) : "",
             audited: a ? yesNo(a.IsAuditEnabled?.Value) : "",
             secured: a ? yesNo(a.IsSecured) : "",
+            // Filled in by the app when several forms are in the dictionary
+            alsoOn: "",
             controlType: item.controlType,
             notes: notes.join("; "),
         };
@@ -300,4 +303,27 @@ export function buildDictionary(items: UiItem[], ownTable: string, tables: Map<s
     }
 
     return { rows, choices, tabs: [...tabs.values()], hiddenSkipped, controlsSkipped, repeatsSkipped, missingMetadata, multipleTables: usedTables.size > 1 };
+}
+
+/**
+ * Marks fields that appear in more than one dictionary: each field row gets the names of
+ * the other dictionaries that contain the same column of the same table.
+ */
+export function markShared(dictionaries: { name: string; dict: Dictionary }[]): void {
+    const key = (r: DictionaryRow) => `${r.values.table}.${r.values.logicalName}`;
+    const where = new Map<string, Set<number>>();
+    dictionaries.forEach(({ dict }, i) => {
+        for (const r of dict.rows) {
+            if (!r.isField) continue;
+            const set = where.get(key(r)) ?? new Set<number>();
+            set.add(i);
+            where.set(key(r), set);
+        }
+    });
+    dictionaries.forEach(({ dict }, i) => {
+        for (const r of dict.rows) {
+            const others = r.isField ? [...(where.get(key(r)) ?? [])].filter((j) => j !== i) : [];
+            r.values.alsoOn = others.map((j) => dictionaries[j].name).join("\n");
+        }
+    });
 }
