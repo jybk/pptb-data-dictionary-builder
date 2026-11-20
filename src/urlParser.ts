@@ -73,7 +73,8 @@ export function parseTarget(input: string): ParsedTarget {
     if (!url.hostname.includes(".")) return result;
 
     result.host = url.hostname.toLowerCase();
-    result.isMakerPortal = /(^|\.)make\.(preview\.)?powerapps\.|(^|\.)make\.powerautomate\./.test(result.host) || /powerapps\.(com|us|cn)$/.test(result.host);
+    // Anchored at both ends: make.powerapps.com.evil.example or notpowerapps.com must not count
+    result.isMakerPortal = /(^|\.)(powerapps|powerautomate)\.(com|us|cn)$/.test(result.host);
 
     const params = new Map<string, string>();
     collectParams(url.search, params);

@@ -2,8 +2,9 @@
 //   node build.mjs            -> dist/ (what ToolBox loads and what is published)
 //   node build.mjs --watch    -> rebuild on change
 //   node build.mjs --preview  -> preview/ = dist + mock ToolBox APIs, open preview/index.html in a browser
-//   node build.mjs --tests    -> bundle tests into .tmp/tests for `node --test`
+//   node build.mjs --tests    -> bundle every tests/*.test.ts into .tmp/tests and run them with `node --test`
 import { build, context } from "esbuild";
+import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 
 const args = new Set(process.argv.slice(2));
@@ -28,8 +29,9 @@ const appOptions = (out) => ({
 
 if (args.has("--tests")) {
     rmSync(".tmp/tests", { recursive: true, force: true });
+    const files = readdirSync("tests").filter((f) => f.endsWith(".test.ts"));
     await build({
-        entryPoints: readdirSync("tests").filter((f) => f.endsWith(".test.ts")).map((f) => `tests/${f}`),
+        entryPoints: files.map((f) => `tests/${f}`),
         bundle: true,
         platform: "node",
         format: "esm",
@@ -37,6 +39,9 @@ if (args.has("--tests")) {
         outExtension: { ".js": ".mjs" },
         logLevel: "warning",
     });
+    // Run every bundled test file by name: works the same on every Node version and OS
+    const run = spawnSync(process.execPath, ["--test", ...files.map((f) => `.tmp/tests/${f.replace(/\.ts$/, ".mjs")}`)], { stdio: "inherit" });
+    process.exit(run.status ?? 1);
 } else if (args.has("--preview")) {
     rmSync("preview", { recursive: true, force: true });
     copyStatic("preview");

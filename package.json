@@ -1,6 +1,6 @@
 {
     "name": "@jybk/pptb-data-dictionary-builder",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "displayName": "Data Dictionary Builder",
     "description": "Generate data dictionaries for Excel, CSV, Markdown and JSON from model-driven app forms and views, with fields in screen order, tabs and sections, and choice values.",
     "main": "index.html",
@@ -42,12 +42,14 @@
         "build": "tsc --noEmit && node build.mjs",
         "watch": "node build.mjs --watch",
         "preview": "node build.mjs --preview",
-        "test": "node build.mjs --tests && node --test .tmp/tests/core.test.mjs",
+        "test": "tsc -p tsconfig.test.json && node build.mjs --tests",
         "validate": "pptb-validate",
-        "finalize-package": "npm shrinkwrap"
+        "finalize-package": "npm shrinkwrap",
+        "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json"
     },
     "devDependencies": {
         "@pptb/types": "^1.2.8",
+        "@types/node": "^22.20.5",
         "@xmldom/xmldom": "^0.9.8",
         "esbuild": "^0.25.12",
         "fflate": "^0.8.2",

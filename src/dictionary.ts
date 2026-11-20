@@ -4,7 +4,6 @@
 import type { Labels, UiItem } from "./layoutParser";
 
 // Web API metadata is consumed as loose JSON; only the properties read below matter.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Json = Record<string, any>;
 
 export interface TableMeta {
@@ -97,8 +96,11 @@ export interface Dictionary {
     multipleTables: boolean;
 }
 
+/** Label in the chosen language; failing that English (1033), then whichever language there is */
 function pick(labels: Labels, lcid: number): string {
     if (labels[lcid]) return labels[lcid];
+    if (labels[1033]) return labels[1033];
+    // Numeric keys iterate in ascending order, so this is the lowest language code, not the base language
     const first = Object.keys(labels)[0];
     return first ? labels[Number(first)] : "";
 }
@@ -206,7 +208,7 @@ function defaultValue(a: Json, opts: Option[]): string {
     const key = typeKey(a);
     let value: unknown;
     if (key === "BooleanType") value = a.DefaultValue === true ? 1 : a.DefaultValue === false ? 0 : undefined;
-    else if (key === "PicklistType" || key === "StateType" || key === "StatusType") value = a.DefaultFormValue;
+    else if (key === "PicklistType" || key === "MultiSelectPicklistType" || key === "StateType" || key === "StatusType") value = a.DefaultFormValue;
     if (typeof value !== "number" || value === -1) return "";
     return opts.find((o) => o.value === value)?.label ?? String(value);
 }
@@ -326,4 +328,13 @@ export function markShared(dictionaries: { name: string; dict: Dictionary }[]): 
             r.values.alsoOn = others.map((j) => dictionaries[j].name).join(", ");
         }
     });
+}
+
+/**
+ * Allowed values for the rows that are shown. Matches on table and column, because the same
+ * column name (statuscode, for one) exists on every table with a different set of choices.
+ */
+export function choicesForRows(choices: ChoiceRow[], rows: DictionaryRow[]): ChoiceRow[] {
+    const shown = new Set(rows.filter((r) => r.isField).map((r) => `${r.values.table}.${r.values.logicalName}`));
+    return choices.filter((c) => shown.has(`${c.table.replace(/^\?/, "")}.${c.logicalName}`));
 }

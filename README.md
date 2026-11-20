@@ -23,6 +23,8 @@ Paste another address and press **Add form** again. Each form or view appears on
 
 With two or more forms, the **Also on** column lists the other forms on the strip that contain the same field, so shared fields stand out. It compares only the forms you added, using the current options (hidden items count only when they are included).
 
+Forms of the same table share the column metadata read for the first one, so the whole export describes one consistent snapshot. To pick up column changes made since, remove those forms and add them again.
+
 Exports then cover every form on the strip: the Excel workbook gets one worksheet per form under the name you gave it, and CSV, the clipboard copy, Markdown and JSON say which form each row belongs to. To swap a form for another, add the new one and remove the old one with ×.
 
 ## Output
@@ -63,7 +65,7 @@ Most of this tool's code, tests and documentation were generated with Claude (An
 ```bash
 npm install
 npm run build      # type-check and bundle into dist/
-npm test           # unit tests for URL parsing, form/view parsing, dictionary rows and exports
+npm test           # type-checks and runs every tests/*.test.ts (parsing, dictionary rows, exports, Dataverse queries)
 npm run preview    # builds preview/ with mock data; open preview/index.html?demo=form in a browser
 ```
 

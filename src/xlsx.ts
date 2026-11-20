@@ -18,7 +18,9 @@ export interface SheetSpec {
 
 function xml(text: string): string {
     return text
-        .replace(/[^\x09\x0A\x0D\x20-퟿-�]/g, "")
+        // Keep every character XML 1.0 allows, including emoji and other characters above U+FFFF
+        // (the u flag makes those one code point instead of two surrogates); drop the rest
+        .replace(/[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

@@ -13,6 +13,11 @@ permissions:
   contents: read
   id-token: write # lets npm verify that this workflow is the publisher
 
+# Never two publishes at once, and never cancel one that has started
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest

@@ -30,7 +30,7 @@
             <div id="notices"></div>
 
             <section id="picker" class="picker" hidden>
-                <h2 id="picker-title"></h2>
+                <h2 id="picker-title" tabindex="-1"></h2>
                 <p id="picker-hint" class="hint"></p>
                 <div id="picker-list"></div>
             </section>
@@ -41,6 +41,7 @@
                     <label class="name-field" title="Shown on the form strip and used as the worksheet name in Excel (31 characters at most)">
                         <span>Form / Excel tab name</span>
                         <input id="form-name" type="text" maxlength="31" spellcheck="false" autocomplete="off" />
+                        <span id="name-hint" class="name-hint" role="status" hidden></span>
                     </label>
                     <div id="summary" class="summary"></div>
                 </div>

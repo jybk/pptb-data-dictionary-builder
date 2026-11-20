@@ -25,9 +25,18 @@ function matrix(ctx: ExportContext, rows: DictionaryRow[] = ctx.rows): (string |
     return rows.map((r) => ctx.columns.map((c) => r.values[c.key] ?? ""));
 }
 
+/**
+ * Spreadsheet apps run text that starts with = + - @ (or a tab or carriage return) as a
+ * formula when they open a CSV or receive a paste. A leading apostrophe makes it plain text.
+ * This also keeps ranges such as "-2,147,483,648 to 2,147,483,647" from turning into errors.
+ */
+export function neutralizeFormula(value: string | number): string | number {
+    return typeof value === "string" && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 function delimited(ctxs: ExportContext[], sep: string): string {
     const quote = (v: string | number) => {
-        const s = String(v);
+        const s = String(neutralizeFormula(v));
         return s.includes(sep) || /["\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const many = ctxs.length > 1;
@@ -38,7 +47,7 @@ function delimited(ctxs: ExportContext[], sep: string): string {
 
 /** UTF-8 with BOM so Excel opens accented labels correctly */
 export function toCsv(ctxs: ExportContext[]): string {
-    return "﻿" + delimited(ctxs, ",");
+    return "\uFEFF" + delimited(ctxs, ",");
 }
 
 /** Tab-separated, for pasting straight into Excel, Word or a wiki table */
@@ -58,16 +67,18 @@ export function toJson(ctxs: ExportContext[]): string {
 }
 
 export function toMarkdown(ctxs: ExportContext[]): string {
-    const cellText = (v: string | number) => String(v).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
+    // "<" is escaped so text from Dataverse cannot become HTML when the Markdown is rendered
+    const plain = (v: string | number) => String(v).replace(/</g, "&lt;");
+    const cellText = (v: string | number) => plain(v).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
     const one = (ctx: ExportContext) => {
         // The tab is the heading of each table, so the Tab column would only repeat it
         const columns = ctx.columns.filter((c) => c.key !== "tab");
-        const out: string[] = [`# ${ctx.title}`, ""];
-        for (const [k, v] of ctx.meta) out.push(`- **${k}:** ${v}`);
+        const out: string[] = [`# ${plain(ctx.title)}`, ""];
+        for (const [k, v] of ctx.meta) out.push(`- **${k}:** ${plain(v)}`);
         for (const tab of ctx.tabs) {
             const rows = ctx.rows.filter((r) => r.groupKey === tab.key);
             if (!rows.length) continue;
-            out.push("", `## ${tab.label}`, "");
+            out.push("", `## ${plain(tab.label)}`, "");
             out.push(`| ${columns.map((c) => c.header).join(" | ")} |`);
             out.push(`| ${columns.map(() => "---").join(" | ")} |`);
             for (const r of rows) out.push(`| ${columns.map((c) => cellText(r.values[c.key] ?? "")).join(" | ")} |`);

@@ -101,12 +101,29 @@ function controlDetail(type: ControlType, control: Element): string {
     return "";
 }
 
-export function parseFormXml(formXml: string, parse: XmlParser): ParsedLayout {
-    const doc = parse(formXml);
-    const form = doc.documentElement;
-    if (!form || form.nodeName.toLowerCase() !== "form") {
-        throw new Error("This form's definition could not be read (unexpected form XML).");
+/**
+ * Parses XML and insists on a clean result. Browsers do not throw on malformed XML: they keep
+ * whatever parsed and insert a <parsererror> element, which would silently truncate the list.
+ */
+function parseStrict(xml: string, parse: XmlParser, root: string, what: string): Element {
+    let doc: Document;
+    try {
+        doc = parse(xml);
+    } catch {
+        throw new Error(`This ${what}'s definition could not be read (malformed XML).`);
     }
+    const el = doc?.documentElement;
+    if (!el || doc.getElementsByTagName("parsererror").length) {
+        throw new Error(`This ${what}'s definition could not be read (malformed XML).`);
+    }
+    if (el.nodeName.toLowerCase() !== root) {
+        throw new Error(`This ${what}'s definition could not be read (unexpected ${what} XML).`);
+    }
+    return el;
+}
+
+export function parseFormXml(formXml: string, parse: XmlParser): ParsedLayout {
+    const form = parseStrict(formXml, parse, "form", "form");
     const items: UiItem[] = [];
     const counts = new Map<number, number>();
 
@@ -177,7 +194,13 @@ export function parseFormXml(formXml: string, parse: XmlParser): ParsedLayout {
 export function readFetchAliases(fetchXml: string, parse: XmlParser): Record<string, string> {
     const aliases: Record<string, string> = {};
     if (!fetchXml) return aliases;
-    const links = parse(fetchXml).getElementsByTagName("link-entity");
+    let links: HTMLCollectionOf<Element>;
+    try {
+        links = parse(fetchXml).getElementsByTagName("link-entity");
+    } catch {
+        // Unreadable FetchXML only costs the linked-table lookup: those columns show as "?alias"
+        return aliases;
+    }
     for (let i = 0; i < links.length; i++) {
         const alias = links[i].getAttribute("alias");
         const name = links[i].getAttribute("name");
@@ -187,8 +210,8 @@ export function readFetchAliases(fetchXml: string, parse: XmlParser): Record<str
 }
 
 export function parseViewLayout(layoutXml: string, fetchXml: string, parse: XmlParser): ParsedLayout {
-    const doc = parse(layoutXml);
-    const cells = doc.getElementsByTagName("cell");
+    const grid = parseStrict(layoutXml, parse, "grid", "view");
+    const cells = grid.getElementsByTagName("cell");
     const aliases = readFetchAliases(fetchXml, parse);
     const items: UiItem[] = [];
     for (let i = 0; i < cells.length; i++) {

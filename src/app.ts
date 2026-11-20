@@ -1,6 +1,6 @@
 /// <reference types="@pptb/types" />
 import { listSurfaces, loadForm, loadTable, loadView, type SurfaceOption, type SurfaceRecord } from "./dataverse";
-import { buildDictionary, COLUMNS, markShared, type ColumnDef, type Dictionary, type DictionaryRow, type TableMeta } from "./dictionary";
+import { buildDictionary, choicesForRows, COLUMNS, markShared, type ColumnDef, type Dictionary, type DictionaryRow, type TableMeta } from "./dictionary";
 import { fileSlug, toCsv, toJson, toMarkdown, toTsv, toXlsx, type ExportContext } from "./exporters";
 import { parseFormXml, parseViewLayout, type ParsedLayout } from "./layoutParser";
 import { hostMismatch, parseTarget, type ParsedTarget } from "./urlParser";
@@ -72,9 +72,16 @@ const state = {
     options: { includeHidden: false, includeControls: false, uniqueOnly: false, splitByTab: false } as Options,
     lcid: 1033,
     columns: new Set(COLUMNS.filter((c) => c.on).map((c) => c.key)),
+    /** Columns the tool switched on itself; they follow their reason and are not remembered */
+    autoColumns: new Set<string>(),
+    /** Columns the user switched off while their reason applied; not switched on again this session */
+    dismissedColumns: new Set<string>(),
     tabFilter: new Set<string>(),
     search: "",
     busy: false,
+    exporting: false,
+    /** Where to move focus after the next render, when the focused element is about to disappear */
+    focusNext: null as "picker" | "result" | null,
     runId: 0,
 };
 
@@ -128,14 +135,45 @@ async function loadSettings(): Promise<void> {
             const known = new Set(COLUMNS.map((c) => c.key));
             state.columns = new Set((saved.columns as string[]).filter((k) => known.has(k)));
         }
-        if (saved?.options && typeof saved.options === "object") state.options = { ...state.options, ...saved.options };
+        // Take only the known switches, and only real booleans, from what was stored
+        const stored = saved?.options;
+        if (stored && typeof stored === "object") {
+            for (const key of Object.keys(state.options) as (keyof Options)[]) {
+                if (typeof stored[key] === "boolean") state.options[key] = stored[key];
+            }
+        }
     } catch {
         /* defaults are fine */
     }
 }
 
 function saveSettings(): void {
-    window.toolboxAPI.settings.setAll({ columns: [...state.columns], options: state.options }).catch(() => undefined);
+    const columns = [...state.columns].filter((k) => !state.autoColumns.has(k));
+    window.toolboxAPI.settings.setAll({ columns, options: state.options }).catch(() => undefined);
+}
+
+/**
+ * Some columns explain something on screen, so the tool shows them while that applies:
+ * Visible with hidden items, Notes with non-field controls, Table when a view reaches into
+ * other tables, Also on with two or more forms. They are hidden again when the reason goes,
+ * unless the user ticked them, which makes them the user's own.
+ */
+function syncAutoColumns(): void {
+    const wanted: Record<string, boolean> = {
+        visible: state.options.includeHidden,
+        notes: state.options.includeControls,
+        table: state.forms.some((f) => f.dict?.multipleTables),
+        alsoOn: state.forms.length > 1,
+    };
+    for (const [key, on] of Object.entries(wanted)) {
+        if (on && !state.columns.has(key) && !state.dismissedColumns.has(key)) {
+            state.columns.add(key);
+            state.autoColumns.add(key);
+        } else if (!on) {
+            state.dismissedColumns.delete(key);
+            if (state.autoColumns.delete(key)) state.columns.delete(key);
+        }
+    }
 }
 
 /* ---------- loading ---------- */
@@ -167,6 +205,7 @@ function activate(index: number): void {
 function removeForm(index: number): void {
     state.forms.splice(index, 1);
     activate(Math.min(index < state.current ? state.current - 1 : state.current, state.forms.length - 1));
+    state.focusNext = "result"; // the × that was clicked is gone
 }
 
 /**
@@ -233,6 +272,7 @@ async function showPicker(etn: string, appId: string | undefined, runId: number)
     state.pickerOptions = options;
     state.pickerTable = etn;
     state.picking = true;
+    state.focusNext = "picker";
 }
 
 async function openOption(option: SurfaceOption): Promise<void> {
@@ -243,7 +283,10 @@ async function openOption(option: SurfaceOption): Promise<void> {
     try {
         const surface = option.kind === "form" ? await loadForm(option.id) : await loadView(option.id);
         if (!surface) throw new Error(`"${option.name}" could not be read. It may have been deleted, or you may not have access to it.`);
-        if (runId === state.runId) await showSurface(surface, runId);
+        if (runId === state.runId) {
+            await showSurface(surface, runId);
+            state.focusNext = "result"; // the option button that was clicked is gone
+        }
     } catch (error) {
         if (runId === state.runId) state.notices.push({ level: "error", text: errorText(error) });
     } finally {
@@ -265,7 +308,10 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
     await Promise.all(
         [...tableNames].map(async (name) => {
             try {
-                tables.set(name, await loadTable(name, lcid));
+                // Reuse what forms already in the dictionary read: saves seven requests per table,
+                // and keeps one consistent snapshot of the metadata across the whole export
+                const known = state.forms.find((f) => f.lcid === lcid && f.tables.has(name))?.tables.get(name);
+                tables.set(name, known ?? (await loadTable(name, lcid)));
             } catch (error) {
                 // The surface's own table is essential; linked tables degrade to rows without metadata
                 if (name === surface.etn) throw error;
@@ -291,9 +337,6 @@ async function showSurface(surface: SurfaceRecord, runId: number): Promise<void>
     else state.forms[state.current] = entry;
     state.picking = false;
     activate(state.mode === "add" || state.current < 0 ? state.forms.length - 1 : state.current);
-    if (state.dict?.multipleTables) state.columns.add("table");
-    // With a second form there is something to compare, so show where fields are shared
-    if (state.forms.length === 2 && state.mode === "add") state.columns.add("alsoOn");
 }
 
 /** Excel allows 31 characters in a worksheet name; keep names apart when the same form is added twice */
@@ -308,8 +351,31 @@ function defaultName(name: string): string {
     return candidate;
 }
 
+/** The name as typed, or the form's own name when the box is empty, within Excel's 31 characters */
+function typedName(form: FormEntry): string {
+    return (form.name.trim() || form.surface.name).slice(0, 31);
+}
+
+/**
+ * Names used on the strip, in "Also on" and in every export. Two forms can be given the same
+ * name; the later one then gets " (2)" so rows and worksheets can always be told apart.
+ */
+function formNames(): string[] {
+    const used = new Set<string>();
+    return state.forms.map((form) => {
+        const base = typedName(form);
+        let name = base;
+        for (let n = 2; used.has(name.toLowerCase()); n++) {
+            const suffix = ` (${n})`;
+            name = base.slice(0, 31 - suffix.length) + suffix;
+        }
+        used.add(name.toLowerCase());
+        return name;
+    });
+}
+
 function formName(form: FormEntry): string {
-    return form.name.trim() || form.surface.name;
+    return formNames()[state.forms.indexOf(form)] ?? typedName(form);
 }
 
 /** Rebuilds every form's dictionary with the current options, then marks the fields they share */
@@ -321,10 +387,12 @@ function rebuild(): void {
     }
     markSharedFields();
     state.dict = currentForm()?.dict ?? null;
+    syncAutoColumns();
 }
 
 function markSharedFields(): void {
-    markShared(state.forms.flatMap((form) => (form.dict ? [{ name: formName(form), dict: form.dict }] : [])));
+    const names = formNames();
+    markShared(state.forms.flatMap((form, i) => (form.dict ? [{ name: names[i], dict: form.dict }] : [])));
 }
 
 /* ---------- derived views ---------- */
@@ -383,12 +451,19 @@ function exportContext(form: FormEntry): ExportContext {
         columns: activeColumns(),
         rows,
         tabs: dict.tabs.filter((t) => keys.has(t.key)),
-        choices: dict.choices.filter((c) => rows.some((r) => r.values.logicalName === c.logicalName)),
+        choices: choicesForRows(dict.choices, rows),
         splitByTab: state.options.splitByTab,
     };
 }
 
 /* ---------- export ---------- */
+
+const MIME: Record<string, string> = {
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    csv: "text/csv;charset=utf-8",
+    md: "text/markdown;charset=utf-8",
+    json: "application/json",
+};
 
 async function save(name: string, content: string | Uint8Array, filterName: string, ext: string): Promise<void> {
     const api = window.toolboxAPI as unknown as { fileSystem?: { saveFile?: Function }; utils?: { saveFile?: Function } };
@@ -399,22 +474,25 @@ async function save(name: string, content: string | Uint8Array, filterName: stri
         return;
     }
     // Outside ToolBox (browser preview): fall back to a normal download
-    const blob = new Blob([content as BlobPart]);
+    const blob = new Blob([content as BlobPart], { type: MIME[ext] ?? "application/octet-stream" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name;
     a.click();
-    URL.revokeObjectURL(a.href);
+    // Some browsers start the download after click() returns; revoking at once can cancel it
+    setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
 }
 
 async function runExport(kind: string): Promise<void> {
-    if (!state.forms.length) return;
+    // One export at a time: a double click must not open two save dialogs
+    if (!state.forms.length || state.exporting) return;
     // Every built form goes into the export; forms with nothing left after filtering are skipped
     const ctxs = state.forms.map(exportContext).filter((c) => c.rows.length);
     if (!ctxs.length) {
         state.notices = [{ level: "warning", text: "There are no rows to export with the current filters." }];
         return render();
     }
+    state.exporting = true;
     const total = ctxs.reduce((n, c) => n + c.rows.length, 0);
     const first = state.forms.find((f) => formName(f) === ctxs[0].name) ?? state.forms[0];
     const base = ctxs.length > 1 ? `data-dictionary-${ctxs.length}-forms` : `${fileSlug(`${first.surface.etn} ${ctxs[0].name}`)}-data-dictionary`;
@@ -430,6 +508,8 @@ async function runExport(kind: string): Promise<void> {
     } catch (error) {
         state.notices = [{ level: "error", text: `The export did not complete: ${errorText(error)}` }];
         render();
+    } finally {
+        state.exporting = false;
     }
 }
 
@@ -479,11 +559,21 @@ function renderSummary(): void {
     if (s.kind === "form") parts.push(plural(bodyTabs, "tab"));
     if (dict.rows.length > fields) parts.push(plural(dict.rows.length - fields, "other control"));
     $("summary").innerHTML =
-        `<span class="title">${esc(s.name)}</span>` +
+        `<span class="title" id="result-title" tabindex="-1">${esc(s.name)}</span>` +
         `<span class="meta">${esc(s.typeLabel)} · ${esc(tableLabel())} · ${parts.join(" · ")}</span>` +
         (currentForm()?.pickerOptions ? `<button type="button" class="linklike" id="back-to-picker">Choose another form or view</button>` : "");
     const input = $<HTMLInputElement>("form-name");
     if (document.activeElement !== input) input.value = currentForm()?.name ?? "";
+    renderNameHint();
+}
+
+/** Says so when the typed name is already taken and the form is exported under another one */
+function renderNameHint(): void {
+    const form = currentForm();
+    const hint = $("name-hint");
+    const shown = form ? formName(form) : "";
+    hint.hidden = !form || shown === typedName(form);
+    hint.textContent = hint.hidden ? "" : `Another form has this name; this one is shown and exported as "${shown}".`;
 }
 
 /** Strip of built forms, shown once there is more than one */
@@ -590,6 +680,11 @@ function render(): void {
         renderColumns();
         renderGrid();
     }
+    // When the element that had focus disappears, put focus somewhere sensible instead of the page
+    const focus = state.focusNext;
+    state.focusNext = null;
+    if (focus === "picker" && hasPicker) $("picker-title").focus();
+    else if (focus === "result" && hasResult) $("result-title").focus();
 }
 
 /* ---------- events ---------- */
@@ -621,6 +716,7 @@ function wire(): void {
         form.name = (e.target as HTMLInputElement).value;
         // Keep the strip and the "Also on" column in step without touching the box being typed in
         renderForms();
+        renderNameHint();
         markSharedFields();
         renderGrid();
     });
@@ -647,10 +743,12 @@ function wire(): void {
             state.pickerOptions = form.pickerOptions;
             state.pickerTable = form.pickerTable;
             state.picking = true;
+            state.focusNext = "picker";
             return render();
         }
         if (el.id === "cancel-picker") {
             state.picking = false;
+            state.focusNext = "result";
             return render();
         }
         const remove = el.closest<HTMLElement>("[data-remove-form]");
@@ -686,15 +784,20 @@ function wire(): void {
         if (el.dataset.option) {
             const key = el.dataset.option as keyof Options;
             state.options[key] = el.checked;
-            // Bring in the columns that explain what the option just added
-            if (key === "includeHidden" && el.checked) state.columns.add("visible");
-            if (key === "includeControls" && el.checked) state.columns.add("notes");
+            rebuild(); // also shows or hides the columns that explain the option
             saveSettings();
-            rebuild();
             render();
         } else if (el.dataset.column) {
-            if (el.checked) state.columns.add(el.dataset.column);
-            else state.columns.delete(el.dataset.column);
+            const key = el.dataset.column;
+            // A column ticked or unticked by hand is the user's choice from now on
+            state.autoColumns.delete(key);
+            if (el.checked) {
+                state.columns.add(key);
+                state.dismissedColumns.delete(key);
+            } else {
+                state.columns.delete(key);
+                state.dismissedColumns.add(key);
+            }
             saveSettings();
             renderGrid();
         } else if (el.id === "language") {
@@ -714,6 +817,7 @@ function wire(): void {
 async function initialize(): Promise<void> {
     wire();
     await Promise.all([applyTheme(), refreshConnection(), loadSettings()]);
+    syncAutoColumns();
     try {
         window.toolboxAPI.events.on((_event, payload) => {
             if (payload?.event?.startsWith("connection:")) void refreshConnection();

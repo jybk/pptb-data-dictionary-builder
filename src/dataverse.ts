@@ -3,7 +3,7 @@
  */
 import type { Json, TableMeta } from "./dictionary";
 import { labelText } from "./dictionary";
-import { isLogicalName } from "./urlParser";
+import { cleanGuid, isLogicalName } from "./urlParser";
 
 export interface SurfaceRecord {
     kind: "form" | "view";
@@ -30,22 +30,56 @@ export interface SurfaceOption {
 
 const FORM_TYPES: Record<number, string> = { 2: "Main form", 6: "Quick view form", 7: "Quick create form", 11: "Card form" };
 
-async function query(odata: string): Promise<Json[]> {
-    const result = (await window.dataverseAPI.queryData(odata)) as Json;
-    return Array.isArray(result?.value) ? result.value : [];
+/** Safety stop for paging; at 5,000 rows a page this is far beyond any form or view list */
+const MAX_PAGES = 50;
+
+/**
+ * Turns an absolute @odata.nextLink back into the relative query that queryData expects
+ * (ToolBox prefixes every query with the connection's ".../api/data/v9.x/").
+ */
+export function nextLinkQuery(nextLink: string): string | null {
+    const m = /\/api\/data\/v\d+(?:\.\d+)?\/(.+)$/i.exec(nextLink);
+    return m ? m[1] : null;
+}
+
+/** Runs a collection query and follows @odata.nextLink, so long result sets are never cut off silently */
+export async function query(odata: string): Promise<Json[]> {
+    const rows: Json[] = [];
+    let next: string | null = odata;
+    for (let page = 0; next; page++) {
+        if (page >= MAX_PAGES) throw new Error("Dataverse returned more pages than expected; the list would be incomplete.");
+        const result = (await window.dataverseAPI.queryData(next)) as Json;
+        if (Array.isArray(result?.value)) rows.push(...result.value);
+        const link = result?.["@odata.nextLink"];
+        if (typeof link !== "string") break;
+        next = nextLinkQuery(link);
+        if (!next) throw new Error("Dataverse returned more results than fit on one page, and the next page could not be requested.");
+    }
+    return rows;
 }
 
 async function querySingle(odata: string): Promise<Json> {
     return (await window.dataverseAPI.queryData(odata)) as Json;
 }
 
+/*
+ * Every value placed in a query goes through one of these two checks here, not only in the
+ * callers, so no future call site can build an OData injection.
+ */
 function requireName(etn: string): string {
     if (!isLogicalName(etn)) throw new Error(`"${etn}" is not a valid table logical name.`);
     return etn;
 }
 
+function requireGuid(id: string): string {
+    const guid = cleanGuid(id);
+    if (!guid) throw new Error(`"${id}" is not a valid id.`);
+    return guid;
+}
+
 export async function loadForm(formId: string): Promise<SurfaceRecord | null> {
-    const rows = await query(`systemforms?$select=formid,name,type,objecttypecode,formxml,description&$filter=formid eq ${formId}`);
+    const id = requireGuid(formId);
+    const rows = await query(`systemforms?$select=formid,name,type,objecttypecode,formxml,description&$filter=formid eq ${id}`);
     const f = rows[0];
     if (!f) return null;
     return {
@@ -61,12 +95,13 @@ export async function loadForm(formId: string): Promise<SurfaceRecord | null> {
 }
 
 export async function loadView(viewId: string): Promise<SurfaceRecord | null> {
-    const system = await query(`savedqueries?$select=savedqueryid,name,returnedtypecode,layoutxml,fetchxml,description&$filter=savedqueryid eq ${viewId}`);
+    const id = requireGuid(viewId);
+    const system = await query(`savedqueries?$select=savedqueryid,name,returnedtypecode,layoutxml,fetchxml,description&$filter=savedqueryid eq ${id}`);
     let v = system[0];
     let typeLabel = "System view";
     if (!v) {
         // Personal views live in a different table and are only visible to their owner or people they are shared with
-        const personal = await query(`userqueries?$select=userqueryid,name,returnedtypecode,layoutxml,fetchxml,description&$filter=userqueryid eq ${viewId}`).catch(() => []);
+        const personal = await query(`userqueries?$select=userqueryid,name,returnedtypecode,layoutxml,fetchxml,description&$filter=userqueryid eq ${id}`).catch(() => []);
         v = personal[0];
         typeLabel = "Personal view";
     }
@@ -86,8 +121,8 @@ export async function loadView(viewId: string): Promise<SurfaceRecord | null> {
 /** Form ids that a model-driven app explicitly includes. Empty set = unknown or the app includes all forms. */
 async function formsInApp(appId: string): Promise<Set<string>> {
     try {
-        const apps = await query(`appmodules?$select=appmoduleidunique&$filter=appmoduleid eq ${appId}`);
-        const unique = apps[0]?.appmoduleidunique;
+        const apps = await query(`appmodules?$select=appmoduleidunique&$filter=appmoduleid eq ${requireGuid(appId)}`);
+        const unique = cleanGuid(apps[0]?.appmoduleidunique);
         if (!unique) return new Set();
         const components = await query(`appmodulecomponents?$select=objectid&$filter=_appmoduleidunique_value eq ${unique} and componenttype eq 60`);
         return new Set(components.map((c) => String(c.objectid).toLowerCase()));
@@ -121,7 +156,8 @@ export async function listSurfaces(etn: string, appId: string | undefined): Prom
     return options;
 }
 
-const OPTION_SET_TYPES = ["Picklist", "MultiSelectPicklist", "State", "Status", "Boolean"];
+/** Attribute types whose metadata carries an option set; each needs its own cast to expand it */
+const OPTION_SET_TYPES = ["Picklist", "MultiSelectPicklist", "State", "Status", "Boolean", "EntityName"];
 
 export async function loadTable(etn: string, lcid: number): Promise<TableMeta> {
     const name = requireName(etn);

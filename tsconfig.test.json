@@ -1,0 +1,7 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "types": ["node", "@pptb/types"]
+    },
+    "include": ["src", "tests"]
+}

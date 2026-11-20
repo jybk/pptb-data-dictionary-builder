@@ -3,15 +3,15 @@ import { test } from "node:test";
 import { DOMParser } from "@xmldom/xmldom";
 import { unzipSync, strFromU8 } from "fflate";
 import "../dev/fixtures.js";
-import { buildDictionary, COLUMNS, markShared, type TableMeta } from "../src/dictionary";
-import { toCsv, toJson, toMarkdown, toXlsx, type ExportContext } from "../src/exporters";
+import { buildDictionary, choicesForRows, COLUMNS, markShared, type ChoiceRow, type DictionaryRow, type TableMeta } from "../src/dictionary";
+import { neutralizeFormula, toCsv, toJson, toMarkdown, toTsv, toXlsx, type ExportContext } from "../src/exporters";
 import { parseFormXml, parseViewLayout } from "../src/layoutParser";
 import { hostMismatch, parseTarget } from "../src/urlParser";
-import { safeSheetNames } from "../src/xlsx";
+import { buildXlsx, safeSheetNames } from "../src/xlsx";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const F = (globalThis as any).DDB_FIXTURES;
-const parse = (xml: string) => new DOMParser().parseFromString(xml, "text/xml") as unknown as Document;
+// xmldom throws on broken XML either way; onError only keeps its messages out of the test output
+const parse = (xml: string) => new DOMParser({ onError: () => undefined }).parseFromString(xml, "text/xml") as unknown as Document;
 const FORM = "8448b78f-8f42-454e-8e2a-f8196b0419af";
 
 function table(name: string, attrs: any[], sets: Record<string, any[]> = {}): TableMeta {
@@ -186,3 +186,107 @@ test("Also on stays on one line in Excel: comma separated, cell not wrapped", ()
     const cell = /<c r="[A-Z]+\d+" s="(\d)" t="inlineStr"><is><t xml:space="preserve">Accounts view, Quick<\/t>/.exec(sheet);
     assert.equal(cell?.[1], "3"); // style 3 = no wrap
 });
+
+/* ---------- review fixes (1.2.1) ---------- */
+
+const sheetXml = (rows: (string | number)[][]) => strFromU8(unzipSync(buildXlsx([{ name: "A", headers: ["h"], widths: [10], rows }]))["xl/worksheets/sheet1.xml"]);
+
+test("xlsx keeps emoji and other characters above U+FFFF, still drops what XML forbids", () => {
+    const xml = sheetXml([["Priority 🔥 high"], ["𠀀 extension B"], ["bad\uD800 lone surrogate"], ["ctrl\u0001char"]]);
+    assert.ok(xml.includes("Priority 🔥 high"));
+    assert.ok(xml.includes("𠀀 extension B"));
+    assert.ok(xml.includes("bad lone surrogate"));
+    assert.ok(xml.includes("ctrlchar"));
+});
+
+test("allowed values follow the rows shown, matched on table and column", () => {
+    const row = (table: string, logicalName: string): DictionaryRow => ({ groupKey: "view", hidden: false, isField: true, values: { table, logicalName } });
+    const choices: ChoiceRow[] = [
+        { table: "account", logicalName: "statuscode", label: "Status Reason", value: 1, choice: "Active" },
+        { table: "contact", logicalName: "statuscode", label: "Status Reason", value: 1, choice: "Active contact" },
+    ];
+    assert.deepEqual(choicesForRows(choices, [row("account", "statuscode")]).map((c) => c.choice), ["Active"]);
+    assert.deepEqual(choicesForRows(choices, [row("contact", "statuscode")]).map((c) => c.choice), ["Active contact"]);
+    assert.equal(choicesForRows(choices, []).length, 0);
+});
+
+test("malformed form and view XML is an error, not a silently short list", () => {
+    assert.throws(() => parseFormXml("<form><tabs><tab>", parse), /could not be read/);
+    assert.throws(() => parseViewLayout("<grid><row><cell name='a'", "", parse), /could not be read/);
+    // What a browser returns for broken XML: the original root, partly parsed, with a <parsererror> inside
+    assert.throws(() => parseViewLayout("<grid><row><cell name='a'/></row><parsererror>x</parsererror></grid>", "", parse), /malformed/);
+    assert.throws(() => parseFormXml("<form><tabs/><parsererror>x</parsererror></form>", parse), /malformed/);
+    assert.throws(() => parseViewLayout("<fetch/>", "", parse), /unexpected view XML/);
+    // Broken FetchXML still only costs the linked-table lookup
+    const layout = parseViewLayout(F.layoutXml, "<fetch><entity", parse);
+    assert.deepEqual(layout.items.map((i) => i.table), ["", "", "?pc", "?zz"]);
+});
+
+test("maker portal is recognised only on real Power Apps and Power Automate hosts", () => {
+    const form = "entity/account/form/edit/8448b78f-8f42-454e-8e2a-f8196b0419af";
+    for (const host of ["make.powerapps.com", "make.preview.powerapps.com", "make.gov.powerapps.us", "make.powerautomate.com", "make.powerapps.cn"]) {
+        assert.equal(parseTarget(`https://${host}/e/x/${form}`).isMakerPortal, true, host);
+    }
+    for (const host of ["make.powerapps.com.evil.example", "notpowerapps.com", "powerapps.com.example.org"]) {
+        const t = parseTarget(`https://${host}/e/x/${form}`);
+        assert.equal(t.isMakerPortal, false, host);
+        assert.ok(hostMismatch(t, "https://dev.crm.dynamics.com"), `${host} should warn`);
+    }
+});
+
+test("CSV and clipboard text cannot start a formula; numbers, JSON and Excel are untouched", () => {
+    assert.equal(neutralizeFormula('=HYPERLINK("http://x")'), `'=HYPERLINK("http://x")`);
+    for (const v of ["+1", "-2,147,483,648 to 2,147,483,647", "@SUM(A1)", "\tx", "\rx"]) assert.equal(neutralizeFormula(v), `'${v}`);
+    assert.equal(neutralizeFormula(-5), -5);
+    assert.equal(neutralizeFormula("Account Name"), "Account Name");
+    const ctx: ExportContext = {
+        name: "=evil",
+        title: "T",
+        meta: [],
+        columns: COLUMNS.filter((c) => c.key === "order" || c.key === "label"),
+        rows: [{ groupKey: "g", hidden: false, isField: true, values: { order: -1, label: "=1+1" } }],
+        tabs: [],
+        choices: [],
+        splitByTab: false,
+    };
+    assert.equal(toCsv([ctx]).split("\r\n")[1], "-1,'=1+1");
+    assert.equal(toTsv([ctx, ctx]).split("\r\n")[1], "'=evil\t-1\t'=1+1");
+    assert.equal(JSON.parse(toJson([ctx])).fields[0]["Label"], "=1+1");
+    assert.ok(strFromU8(unzipSync(toXlsx([ctx]))["xl/worksheets/sheet1.xml"]).includes(">=1+1<"));
+});
+
+test("Markdown escapes < so Dataverse text cannot become HTML", () => {
+    const ctx: ExportContext = {
+        name: "n",
+        title: "Form <b>x</b>",
+        meta: [["Note", "<img src=x onerror=alert(1)>"]],
+        columns: COLUMNS.filter((c) => c.key === "label" || c.key === "description"),
+        rows: [{ groupKey: "g", hidden: false, isField: true, values: { label: "a|b", description: "line 1\n<script>x</script>" } }],
+        tabs: [{ key: "g", label: "<i>Tab</i>", count: 1 }],
+        choices: [],
+        splitByTab: false,
+    };
+    const md = toMarkdown([ctx]);
+    assert.ok(!/<(b|img|script|i)\b/.test(md), md);
+    assert.ok(md.includes("| a\\|b | line 1<br>&lt;script>x&lt;/script> |"));
+});
+
+test("sheet names: backslash replaced, truncated names that collide still differ", () => {
+    const long = "Customer onboarding main form for sales";
+    const names = safeSheetNames(["a\\b", long, `${long} v2`]);
+    assert.equal(names[0], "a b");
+    assert.equal(names[1], long.slice(0, 31));
+    assert.equal(names[2], `${long.slice(0, 27)} (2)`);
+    assert.ok(names.every((n) => n.length <= 31));
+});
+
+test("label fallback prefers English over the lowest language code; multi-select default shown", () => {
+    const xml = `<form><tabs><tab name="t"><labels><label description="Allgemein" languagecode="1031"/><label description="General" languagecode="1033"/></labels><columns><column><sections><section name="s"><labels/><rows><row><cell><labels/><control id="c" datafieldname="new_tags"/></cell></row></rows></section></sections></column></columns></tab></tabs></form>`;
+    const attr = { LogicalName: "new_tags", AttributeTypeName: { Value: "MultiSelectPicklistType" }, DefaultFormValue: 2, DisplayName: F.L("Tags") };
+    const t = table("account", [attr], { MultiSelectPicklist: [{ LogicalName: "new_tags", OptionSet: { Options: [{ Value: 1, Label: F.L("Red") }, { Value: 2, Label: F.L("Blue") }] } }] });
+    const d = buildDictionary(parseFormXml(xml, parse).items, "account", new Map([["account", t]]), { ...defaults, lcid: 1043 });
+    assert.equal(d.rows[0].values.tab, "General");
+    assert.equal(d.rows[0].values.defaultValue, "Blue");
+    assert.equal(d.rows[0].values.dataType, "Choices (multi-select)");
+});
+
